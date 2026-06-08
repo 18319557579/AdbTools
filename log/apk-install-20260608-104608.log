@@ -1,0 +1,207 @@
+﻿[10:37:23] 刷新设备...
+[10:37:23] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe devices -l
+[10:37:23] List of devices attached
+[10:37:23] VBJDU19521002427       device product:COL-AL10 model:COL_AL10 device:HWCOL transport_id:4
+[10:37:23] 127.0.0.1:5555         device product:PD2241 model:V2241A device:PD2241 transport_id:1
+[10:37:23] 
+[10:37:23] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.product.manufacturer
+[10:37:23] HUAWEI
+[10:37:23] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.build.version.release
+[10:37:23] 10
+[10:37:23] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.product.manufacturer
+[10:37:23] vivo
+[10:37:23] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.build.version.release
+[10:37:23] 12
+[10:45:21] > C:\Users\Administrator\AppData\Local\Android\Sdk\build-tools\36.0.0\aapt.exe dump badging D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:22] package: name='com.vova.app' versionCode='34' versionName='1.3.4' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+[10:45:22] sdkVersion:'24'
+[10:45:22] targetSdkVersion:'35'
+[10:45:22] uses-permission: name='android.permission.INTERNET'
+[10:45:22] uses-permission: name='android.permission.RECORD_AUDIO'
+[10:45:22] uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+[10:45:22] uses-permission: name='android.permission.ACCESS_WIFI_STATE'
+[10:45:22] uses-permission: name='android.permission.VIBRATE'
+[10:45:22] uses-permission: name='android.permission.POST_NOTIFICATIONS'
+[10:45:22] uses-permission: name='android.permission.FOREGROUND_SERVICE'
+[10:45:22] uses-permission: name='android.permission.FOREGROUND_SERVICE_MICROPHONE'
+[10:45:22] uses-permission: name='android.permission.MODIFY_AUDIO_SETTINGS'
+[10:45:22] uses-permission: name='android.permission.FLASHLIGHT'
+[10:45:22] uses-permission: name='android.permission.READ_MEDIA_AUDIO'
+[10:45:22] uses-permission: name='android.permission.READ_EXTERNAL_STORAGE' maxSdkVersion='32'
+[10:45:22] uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE' maxSdkVersion='32'
+[10:45:22] uses-permission: name='android.permission.USE_BIOMETRIC'
+[10:45:22] uses-permission: name='android.permission.USE_FINGERPRINT'
+[10:45:22] uses-permission: name='com.android.vending.BILLING'
+[10:45:22] uses-permission: name='android.permission.WAKE_LOCK'
+[10:45:22] uses-permission: name='com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE'
+[10:45:22] uses-permission: name='android.permission.ACCESS_ADSERVICES_ATTRIBUTION'
+[10:45:22] uses-permission: name='android.permission.ACCESS_ADSERVICES_AD_ID'
+[10:45:22] uses-permission: name='android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE'
+[10:45:22] uses-permission: name='android.permission.ACCESS_ADSERVICES_TOPICS'
+[10:45:22] uses-permission: name='com.vova.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
+[10:45:22] application-label:'Vova'
+[10:45:22] application-label-af:'Vova'
+[10:45:22] application-label-am:'Vova'
+[10:45:22] application-label-ar:'Vova'
+[10:45:22] application-label-as:'Vova'
+[10:45:22] application-label-az:'Vova'
+[10:45:22] application-label-be:'Vova'
+[10:45:22] application-label-bg:'Vova'
+[10:45:22] application-label-bn:'Vova'
+[10:45:22] application-label-bs:'Vova'
+[10:45:22] application-label-ca:'Vova'
+[10:45:22] application-label-cs:'Vova'
+[10:45:22] application-label-da:'Vova'
+[10:45:22] application-label-de:'Vova'
+[10:45:22] application-label-el:'Vova'
+[10:45:22] application-label-en:'Vova'
+[10:45:22] application-label-en-AU:'Vova'
+[10:45:22] application-label-en-CA:'Vova'
+[10:45:22] application-label-en-GB:'Vova'
+[10:45:22] application-label-en-IN:'Vova'
+[10:45:22] application-label-en-XC:'Vova'
+[10:45:22] application-label-es:'Vova'
+[10:45:22] application-label-es-419:'Vova'
+[10:45:22] application-label-es-ES:'Vova'
+[10:45:22] application-label-es-US:'Vova'
+[10:45:22] application-label-et:'Vova'
+[10:45:22] application-label-eu:'Vova'
+[10:45:22] application-label-fa:'Vova'
+[10:45:22] application-label-fi:'Vova'
+[10:45:22] application-label-fr:'Vova'
+[10:45:22] application-label-fr-CA:'Vova'
+[10:45:22] application-label-gl:'Vova'
+[10:45:22] application-label-gu:'Vova'
+[10:45:22] application-label-hi:'Vova'
+[10:45:22] application-label-hr:'Vova'
+[10:45:22] application-label-hu:'Vova'
+[10:45:22] application-label-hy:'Vova'
+[10:45:22] application-label-id:'Vova'
+[10:45:22] application-label-in:'Vova'
+[10:45:22] application-label-is:'Vova'
+[10:45:22] application-label-it:'Vova'
+[10:45:22] application-label-iw:'Vova'
+[10:45:22] application-label-ja:'Vova'
+[10:45:22] application-label-ka:'Vova'
+[10:45:22] application-label-kk:'Vova'
+[10:45:22] application-label-km:'Vova'
+[10:45:22] application-label-kn:'Vova'
+[10:45:22] application-label-ko:'Vova'
+[10:45:22] application-label-ky:'Vova'
+[10:45:22] application-label-lo:'Vova'
+[10:45:22] application-label-lt:'Vova'
+[10:45:22] application-label-lv:'Vova'
+[10:45:22] application-label-mk:'Vova'
+[10:45:22] application-label-ml:'Vova'
+[10:45:22] application-label-mn:'Vova'
+[10:45:22] application-label-mr:'Vova'
+[10:45:22] application-label-ms:'Vova'
+[10:45:22] application-label-my:'Vova'
+[10:45:22] application-label-nb:'Vova'
+[10:45:22] application-label-ne:'Vova'
+[10:45:22] application-label-nl:'Vova'
+[10:45:22] application-label-or:'Vova'
+[10:45:22] application-label-pa:'Vova'
+[10:45:22] application-label-pl:'Vova'
+[10:45:22] application-label-pt:'Vova'
+[10:45:22] application-label-pt-BR:'Vova'
+[10:45:22] application-label-pt-PT:'Vova'
+[10:45:22] application-label-ro:'Vova'
+[10:45:22] application-label-ru:'Vova'
+[10:45:22] application-label-si:'Vova'
+[10:45:22] application-label-sk:'Vova'
+[10:45:22] application-label-sl:'Vova'
+[10:45:22] application-label-sq:'Vova'
+[10:45:22] application-label-sr:'Vova'
+[10:45:22] application-label-sr-Latn:'Vova'
+[10:45:22] application-label-sv:'Vova'
+[10:45:22] application-label-sw:'Vova'
+[10:45:22] application-label-ta:'Vova'
+[10:45:22] application-label-te:'Vova'
+[10:45:22] application-label-th:'Vova'
+[10:45:22] application-label-tl:'Vova'
+[10:45:22] application-label-tr:'Vova'
+[10:45:22] application-label-uk:'Vova'
+[10:45:22] application-label-ur:'Vova'
+[10:45:22] application-label-uz:'Vova'
+[10:45:22] application-label-vi:'Vova'
+[10:45:22] application-label-zh:'Vova'
+[10:45:22] application-label-zh-CN:'Vova'
+[10:45:22] application-label-zh-HK:'Vova'
+[10:45:22] application-label-zh-TW:'Vova'
+[10:45:22] application-label-zu:'Vova'
+[10:45:22] application-icon-120:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[10:45:22] application-icon-160:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[10:45:22] application-icon-240:'res/mipmap-hdpi-v4/ic_launcher.webp'
+[10:45:22] application-icon-320:'res/mipmap-xhdpi-v4/ic_launcher.webp'
+[10:45:22] application-icon-480:'res/mipmap-xxhdpi-v4/ic_launcher.webp'
+[10:45:22] application-icon-640:'res/mipmap-xxxhdpi-v4/ic_launcher.webp'
+[10:45:22] application-icon-65534:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[10:45:22] application: label='Vova' icon='res/mipmap-mdpi-v4/ic_launcher.webp'
+[10:45:22] testOnly='-1'
+[10:45:22] application-debuggable
+[10:45:22] launchable-activity: name='com.vova.app.ui.LauncherActivity'  label='' icon=''
+[10:45:22] uses-library-not-required:'android.ext.adservices'
+[10:45:22] feature-group: label=''
+[10:45:22]   uses-feature-not-required: name='android.hardware.camera'
+[10:45:22]   uses-feature: name='android.hardware.faketouch'
+[10:45:22]   uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+[10:45:22]   uses-feature: name='android.hardware.microphone'
+[10:45:22]   uses-implied-feature: name='android.hardware.microphone' reason='requested android.permission.RECORD_AUDIO permission'
+[10:45:22]   uses-feature: name='android.hardware.screen.portrait'
+[10:45:22]   uses-implied-feature: name='android.hardware.screen.portrait' reason='one or more activities have specified a portrait orientation'
+[10:45:22]   uses-feature: name='android.hardware.wifi'
+[10:45:22]   uses-implied-feature: name='android.hardware.wifi' reason='requested android.permission.ACCESS_WIFI_STATE permission'
+[10:45:22] main
+[10:45:22] other-activities
+[10:45:22] other-receivers
+[10:45:22] other-services
+[10:45:22] supports-screens: 'small' 'normal' 'large' 'xlarge'
+[10:45:22] supports-any-density: 'true'
+[10:45:22] locales: '--_--' 'af' 'am' 'ar' 'as' 'az' 'be' 'bg' 'bn' 'bs' 'ca' 'cs' 'da' 'de' 'el' 'en' 'en-AU' 'en-CA' 'en-GB' 'en-IN' 'en-XC' 'es' 'es-419' 'es-ES' 'es-US' 'et' 'eu' 'fa' 'fi' 'fr' 'fr-CA' 'gl' 'gu' 'hi' 'hr' 'hu' 'hy' 'id' 'in' 'is' 'it' 'iw' 'ja' 'ka' 'kk' 'km' 'kn' 'ko' 'ky' 'lo' 'lt' 'lv' 'mk' 'ml' 'mn' 'mr' 'ms' 'my' 'nb' 'ne' 'nl' 'or' 'pa' 'pl' 'pt' 'pt-BR' 'pt-PT' 'ro' 'ru' 'si' 'sk' 'sl' 'sq' 'sr' 'sr-Latn' 'sv' 'sw' 'ta' 'te' 'th' 'tl' 'tr' 'uk' 'ur' 'uz' 'vi' 'zh' 'zh-CN' 'zh-HK' 'zh-TW' 'zu'
+[10:45:22] densities: '120' '160' '240' '320' '480' '640' '65534'
+[10:45:22] native-code: 'arm64-v8a' 'armeabi-v7a'
+[10:45:33] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:33] [1/2] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[10:45:33] 安装 APK...
+[10:45:33] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:34] 收到中止请求，正在结束当前 adb/aapt 进程...
+[10:45:34] 已中止：成功 0，失败 0，跳过 0
+[10:45:41] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:41] [1/2] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[10:45:41] 安装 APK...
+[10:45:41] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:45] 收到中止请求，正在结束当前 adb/aapt 进程...
+[10:45:46] 已中止：成功 0，失败 0，跳过 0
+[10:45:47] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:47] [1/2] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[10:45:47] 安装 APK...
+[10:45:47] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:49] 收到中止请求，正在结束当前 adb/aapt 进程...
+[10:45:49] 已中止：成功 0，失败 0，跳过 0
+[10:45:51] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:45:51] [1/1] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[10:45:51] 安装 APK...
+[10:45:51] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:46:00] Performing Streamed Install
+[10:46:00] Success
+[10:46:00] 安装成功。
+[10:46:00] 执行完成：成功 1，失败 0，跳过 0
+[10:46:05] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:46:05] [1/1] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[10:46:05] 安装 APK...
+[10:46:05] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:46:06] 收到中止请求，正在结束当前 adb/aapt 进程...
+[10:46:06] 已中止：成功 0，失败 0，跳过 0
+[10:46:06] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:46:06] [1/1] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[10:46:06] 安装 APK...
+[10:46:06] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:46:07] 收到中止请求，正在结束当前 adb/aapt 进程...
+[10:46:07] 已中止：成功 0，失败 0，跳过 0
+[10:46:07] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:46:07] [1/1] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[10:46:07] 安装 APK...
+[10:46:07] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1025-debug.apk
+[10:46:08] 收到中止请求，正在结束当前 adb/aapt 进程...
+[10:46:08] 已中止：成功 0，失败 0，跳过 0

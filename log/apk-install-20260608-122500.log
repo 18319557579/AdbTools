@@ -1,0 +1,394 @@
+﻿[12:22:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\build-tools\36.0.0\aapt.exe dump badging D:\apk_share\Vova-1.3.4-2026_0608_1133-debug.apk
+[12:22:08] package: name='com.vova.app' versionCode='34' versionName='1.3.4' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+[12:22:08] sdkVersion:'24'
+[12:22:08] targetSdkVersion:'35'
+[12:22:08] uses-permission: name='android.permission.INTERNET'
+[12:22:08] uses-permission: name='android.permission.RECORD_AUDIO'
+[12:22:08] uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+[12:22:08] uses-permission: name='android.permission.ACCESS_WIFI_STATE'
+[12:22:08] uses-permission: name='android.permission.VIBRATE'
+[12:22:08] uses-permission: name='android.permission.POST_NOTIFICATIONS'
+[12:22:08] uses-permission: name='android.permission.FOREGROUND_SERVICE'
+[12:22:08] uses-permission: name='android.permission.FOREGROUND_SERVICE_MICROPHONE'
+[12:22:08] uses-permission: name='android.permission.MODIFY_AUDIO_SETTINGS'
+[12:22:08] uses-permission: name='android.permission.FLASHLIGHT'
+[12:22:08] uses-permission: name='android.permission.READ_MEDIA_AUDIO'
+[12:22:08] uses-permission: name='android.permission.READ_EXTERNAL_STORAGE' maxSdkVersion='32'
+[12:22:08] uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE' maxSdkVersion='32'
+[12:22:08] uses-permission: name='android.permission.USE_BIOMETRIC'
+[12:22:08] uses-permission: name='android.permission.USE_FINGERPRINT'
+[12:22:08] uses-permission: name='com.android.vending.BILLING'
+[12:22:08] uses-permission: name='android.permission.WAKE_LOCK'
+[12:22:08] uses-permission: name='com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE'
+[12:22:08] uses-permission: name='android.permission.ACCESS_ADSERVICES_ATTRIBUTION'
+[12:22:08] uses-permission: name='android.permission.ACCESS_ADSERVICES_AD_ID'
+[12:22:08] uses-permission: name='android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE'
+[12:22:08] uses-permission: name='android.permission.ACCESS_ADSERVICES_TOPICS'
+[12:22:08] uses-permission: name='com.vova.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
+[12:22:08] application-label:'Vova'
+[12:22:08] application-label-af:'Vova'
+[12:22:08] application-label-am:'Vova'
+[12:22:08] application-label-ar:'Vova'
+[12:22:08] application-label-as:'Vova'
+[12:22:08] application-label-az:'Vova'
+[12:22:08] application-label-be:'Vova'
+[12:22:08] application-label-bg:'Vova'
+[12:22:08] application-label-bn:'Vova'
+[12:22:08] application-label-bs:'Vova'
+[12:22:08] application-label-ca:'Vova'
+[12:22:08] application-label-cs:'Vova'
+[12:22:08] application-label-da:'Vova'
+[12:22:08] application-label-de:'Vova'
+[12:22:08] application-label-el:'Vova'
+[12:22:08] application-label-en:'Vova'
+[12:22:08] application-label-en-AU:'Vova'
+[12:22:08] application-label-en-CA:'Vova'
+[12:22:08] application-label-en-GB:'Vova'
+[12:22:08] application-label-en-IN:'Vova'
+[12:22:08] application-label-en-XC:'Vova'
+[12:22:08] application-label-es:'Vova'
+[12:22:08] application-label-es-419:'Vova'
+[12:22:08] application-label-es-ES:'Vova'
+[12:22:08] application-label-es-US:'Vova'
+[12:22:08] application-label-et:'Vova'
+[12:22:08] application-label-eu:'Vova'
+[12:22:08] application-label-fa:'Vova'
+[12:22:08] application-label-fi:'Vova'
+[12:22:08] application-label-fr:'Vova'
+[12:22:08] application-label-fr-CA:'Vova'
+[12:22:08] application-label-gl:'Vova'
+[12:22:08] application-label-gu:'Vova'
+[12:22:08] application-label-hi:'Vova'
+[12:22:08] application-label-hr:'Vova'
+[12:22:08] application-label-hu:'Vova'
+[12:22:08] application-label-hy:'Vova'
+[12:22:08] application-label-id:'Vova'
+[12:22:08] application-label-in:'Vova'
+[12:22:08] application-label-is:'Vova'
+[12:22:08] application-label-it:'Vova'
+[12:22:08] application-label-iw:'Vova'
+[12:22:08] application-label-ja:'Vova'
+[12:22:08] application-label-ka:'Vova'
+[12:22:08] application-label-kk:'Vova'
+[12:22:08] application-label-km:'Vova'
+[12:22:08] application-label-kn:'Vova'
+[12:22:08] application-label-ko:'Vova'
+[12:22:08] application-label-ky:'Vova'
+[12:22:08] application-label-lo:'Vova'
+[12:22:08] application-label-lt:'Vova'
+[12:22:08] application-label-lv:'Vova'
+[12:22:08] application-label-mk:'Vova'
+[12:22:08] application-label-ml:'Vova'
+[12:22:08] application-label-mn:'Vova'
+[12:22:08] application-label-mr:'Vova'
+[12:22:08] application-label-ms:'Vova'
+[12:22:08] application-label-my:'Vova'
+[12:22:08] application-label-nb:'Vova'
+[12:22:08] application-label-ne:'Vova'
+[12:22:08] application-label-nl:'Vova'
+[12:22:08] application-label-or:'Vova'
+[12:22:08] application-label-pa:'Vova'
+[12:22:08] application-label-pl:'Vova'
+[12:22:08] application-label-pt:'Vova'
+[12:22:08] application-label-pt-BR:'Vova'
+[12:22:08] application-label-pt-PT:'Vova'
+[12:22:08] application-label-ro:'Vova'
+[12:22:08] application-label-ru:'Vova'
+[12:22:08] application-label-si:'Vova'
+[12:22:08] application-label-sk:'Vova'
+[12:22:08] application-label-sl:'Vova'
+[12:22:08] application-label-sq:'Vova'
+[12:22:08] application-label-sr:'Vova'
+[12:22:08] application-label-sr-Latn:'Vova'
+[12:22:08] application-label-sv:'Vova'
+[12:22:08] application-label-sw:'Vova'
+[12:22:08] application-label-ta:'Vova'
+[12:22:08] application-label-te:'Vova'
+[12:22:08] application-label-th:'Vova'
+[12:22:08] application-label-tl:'Vova'
+[12:22:08] application-label-tr:'Vova'
+[12:22:08] application-label-uk:'Vova'
+[12:22:08] application-label-ur:'Vova'
+[12:22:08] application-label-uz:'Vova'
+[12:22:08] application-label-vi:'Vova'
+[12:22:08] application-label-zh:'Vova'
+[12:22:08] application-label-zh-CN:'Vova'
+[12:22:08] application-label-zh-HK:'Vova'
+[12:22:08] application-label-zh-TW:'Vova'
+[12:22:08] application-label-zu:'Vova'
+[12:22:08] application-icon-120:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:22:08] application-icon-160:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:22:08] application-icon-240:'res/mipmap-hdpi-v4/ic_launcher.webp'
+[12:22:08] application-icon-320:'res/mipmap-xhdpi-v4/ic_launcher.webp'
+[12:22:08] application-icon-480:'res/mipmap-xxhdpi-v4/ic_launcher.webp'
+[12:22:08] application-icon-640:'res/mipmap-xxxhdpi-v4/ic_launcher.webp'
+[12:22:08] application-icon-65534:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:22:08] application: label='Vova' icon='res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:22:08] application-debuggable
+[12:22:08] launchable-activity: name='com.vova.app.ui.LauncherActivity'  label='' icon=''
+[12:22:08] uses-library-not-required:'android.ext.adservices'
+[12:22:08] feature-group: label=''
+[12:22:08]   uses-feature-not-required: name='android.hardware.camera'
+[12:22:08]   uses-feature: name='android.hardware.faketouch'
+[12:22:08]   uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+[12:22:08]   uses-feature: name='android.hardware.microphone'
+[12:22:08]   uses-implied-feature: name='android.hardware.microphone' reason='requested android.permission.RECORD_AUDIO permission'
+[12:22:08]   uses-feature: name='android.hardware.screen.portrait'
+[12:22:08]   uses-implied-feature: name='android.hardware.screen.portrait' reason='one or more activities have specified a portrait orientation'
+[12:22:08]   uses-feature: name='android.hardware.wifi'
+[12:22:08]   uses-implied-feature: name='android.hardware.wifi' reason='requested android.permission.ACCESS_WIFI_STATE permission'
+[12:22:08] main
+[12:22:08] other-activities
+[12:22:08] other-receivers
+[12:22:08] other-services
+[12:22:08] supports-screens: 'small' 'normal' 'large' 'xlarge'
+[12:22:08] supports-any-density: 'true'
+[12:22:08] locales: '--_--' 'af' 'am' 'ar' 'as' 'az' 'be' 'bg' 'bn' 'bs' 'ca' 'cs' 'da' 'de' 'el' 'en' 'en-AU' 'en-CA' 'en-GB' 'en-IN' 'en-XC' 'es' 'es-419' 'es-ES' 'es-US' 'et' 'eu' 'fa' 'fi' 'fr' 'fr-CA' 'gl' 'gu' 'hi' 'hr' 'hu' 'hy' 'id' 'in' 'is' 'it' 'iw' 'ja' 'ka' 'kk' 'km' 'kn' 'ko' 'ky' 'lo' 'lt' 'lv' 'mk' 'ml' 'mn' 'mr' 'ms' 'my' 'nb' 'ne' 'nl' 'or' 'pa' 'pl' 'pt' 'pt-BR' 'pt-PT' 'ro' 'ru' 'si' 'sk' 'sl' 'sq' 'sr' 'sr-Latn' 'sv' 'sw' 'ta' 'te' 'th' 'tl' 'tr' 'uk' 'ur' 'uz' 'vi' 'zh' 'zh-CN' 'zh-HK' 'zh-TW' 'zu'
+[12:22:08] densities: '120' '160' '240' '320' '480' '640' '65534'
+[12:22:08] native-code: 'arm64-v8a' 'armeabi-v7a'
+[12:22:08] 刷新设备...
+[12:22:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe devices -l
+[12:22:08] List of devices attached
+[12:22:08] BIG6WODMPVAEHADU       device product:PD1986 model:V1986A device:PD1986 transport_id:5
+[12:22:08] VBJDU19521002427       device product:COL-AL10 model:COL_AL10 device:HWCOL transport_id:4
+[12:22:08] 127.0.0.1:5555         device product:PD2241 model:V2241A device:PD2241 transport_id:1
+[12:22:08] 
+[12:22:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.product.manufacturer
+[12:22:08] vivo
+[12:22:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.build.version.release
+[12:22:08] 12
+[12:22:09] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.product.manufacturer
+[12:22:09] HUAWEI
+[12:22:09] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.build.version.release
+[12:22:09] 10
+[12:22:09] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.product.manufacturer
+[12:22:09] vivo
+[12:22:09] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.build.version.release
+[12:22:09] 12
+[12:22:15] 连接设备...
+[12:22:15] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe connect 192.168.1.100:5555
+[12:22:36] cannot connect to 192.168.1.100:5555: 鐢变簬杩炴帴鏂瑰湪涓€娈垫椂闂村悗娌℃湁姝ｇ‘绛斿鎴栬繛鎺ョ殑涓绘満娌℃湁鍙嶅簲锛岃繛鎺ュ皾璇曞け璐ャ€?(10060)
+[12:22:36] 连接设备结果：cannot connect to 192.168.1.100:5555: 鐢变簬杩炴帴鏂瑰湪涓€娈垫椂闂村悗娌℃湁姝ｇ‘绛斿鎴栬繛鎺ョ殑涓绘満娌℃湁鍙嶅簲锛岃繛鎺ュ皾璇曞け璐ャ€?(10060)
+[12:22:36] 刷新设备...
+[12:22:36] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe devices -l
+[12:22:36] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.product.manufacturer
+[12:22:36] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.build.version.release
+[12:22:36] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.product.manufacturer
+[12:22:36] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.build.version.release
+[12:22:36] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.product.manufacturer
+[12:22:36] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.build.version.release
+[12:22:36] List of devices attached
+[12:22:36] BIG6WODMPVAEHADU       device product:PD1986 model:V1986A device:PD1986 transport_id:5
+[12:22:36] VBJDU19521002427       device product:COL-AL10 model:COL_AL10 device:HWCOL transport_id:4
+[12:22:36] 127.0.0.1:5555         device product:PD2241 model:V2241A device:PD2241 transport_id:1
+[12:22:36] 
+[12:22:36] vivo
+[12:22:36] 12
+[12:22:36] HUAWEI
+[12:22:36] 10
+[12:22:36] vivo
+[12:22:36] 12
+[12:23:08] 断连设备...
+[12:23:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe disconnect 127.0.0.1:5555
+[12:23:08] disconnected 127.0.0.1:5555
+[12:23:08] 断连设备结果：disconnected 127.0.0.1:5555
+[12:23:08] 刷新设备...
+[12:23:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe devices -l
+[12:23:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.product.manufacturer
+[12:23:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.build.version.release
+[12:23:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.product.manufacturer
+[12:23:08] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.build.version.release
+[12:23:08] List of devices attached
+[12:23:08] BIG6WODMPVAEHADU       device product:PD1986 model:V1986A device:PD1986 transport_id:5
+[12:23:08] VBJDU19521002427       device product:COL-AL10 model:COL_AL10 device:HWCOL transport_id:4
+[12:23:08] 
+[12:23:08] vivo
+[12:23:08] 12
+[12:23:08] HUAWEI
+[12:23:08] 10
+[12:23:10] 连接设备...
+[12:23:10] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe connect 127.0.0.1:5555
+[12:23:10] connected to 127.0.0.1:5555
+[12:23:10] 连接设备结果：connected to 127.0.0.1:5555
+[12:23:10] 刷新设备...
+[12:23:10] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe devices -l
+[12:23:10] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.product.manufacturer
+[12:23:11] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s BIG6WODMPVAEHADU shell getprop ro.build.version.release
+[12:23:11] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.product.manufacturer
+[12:23:11] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell getprop ro.build.version.release
+[12:23:11] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.product.manufacturer
+[12:23:11] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s 127.0.0.1:5555 shell getprop ro.build.version.release
+[12:23:11] List of devices attached
+[12:23:11] BIG6WODMPVAEHADU       device product:PD1986 model:V1986A device:PD1986 transport_id:5
+[12:23:11] VBJDU19521002427       device product:COL-AL10 model:COL_AL10 device:HWCOL transport_id:4
+[12:23:11] 127.0.0.1:5555         device product:PD2241 model:V2241A device:PD2241 transport_id:6
+[12:23:11] 
+[12:23:11] vivo
+[12:23:11] 12
+[12:23:11] HUAWEI
+[12:23:11] 10
+[12:23:11] vivo
+[12:23:11] 12
+[12:24:46] > C:\Users\Administrator\AppData\Local\Android\Sdk\build-tools\36.0.0\aapt.exe dump badging D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1214-debug.apk
+[12:24:46] package: name='com.vova.app' versionCode='34' versionName='1.3.4' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+[12:24:46] sdkVersion:'24'
+[12:24:46] targetSdkVersion:'35'
+[12:24:46] uses-permission: name='android.permission.INTERNET'
+[12:24:46] uses-permission: name='android.permission.RECORD_AUDIO'
+[12:24:46] uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+[12:24:46] uses-permission: name='android.permission.ACCESS_WIFI_STATE'
+[12:24:46] uses-permission: name='android.permission.VIBRATE'
+[12:24:46] uses-permission: name='android.permission.POST_NOTIFICATIONS'
+[12:24:46] uses-permission: name='android.permission.FOREGROUND_SERVICE'
+[12:24:46] uses-permission: name='android.permission.FOREGROUND_SERVICE_MICROPHONE'
+[12:24:46] uses-permission: name='android.permission.MODIFY_AUDIO_SETTINGS'
+[12:24:46] uses-permission: name='android.permission.FLASHLIGHT'
+[12:24:46] uses-permission: name='android.permission.READ_MEDIA_AUDIO'
+[12:24:46] uses-permission: name='android.permission.READ_EXTERNAL_STORAGE' maxSdkVersion='32'
+[12:24:46] uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE' maxSdkVersion='32'
+[12:24:46] uses-permission: name='android.permission.USE_BIOMETRIC'
+[12:24:46] uses-permission: name='android.permission.USE_FINGERPRINT'
+[12:24:46] uses-permission: name='com.android.vending.BILLING'
+[12:24:46] uses-permission: name='android.permission.WAKE_LOCK'
+[12:24:46] uses-permission: name='com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE'
+[12:24:46] uses-permission: name='android.permission.ACCESS_ADSERVICES_ATTRIBUTION'
+[12:24:46] uses-permission: name='android.permission.ACCESS_ADSERVICES_AD_ID'
+[12:24:46] uses-permission: name='android.permission.ACCESS_ADSERVICES_CUSTOM_AUDIENCE'
+[12:24:46] uses-permission: name='android.permission.ACCESS_ADSERVICES_TOPICS'
+[12:24:46] uses-permission: name='com.vova.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
+[12:24:46] application-label:'Vova'
+[12:24:46] application-label-af:'Vova'
+[12:24:46] application-label-am:'Vova'
+[12:24:46] application-label-ar:'Vova'
+[12:24:46] application-label-as:'Vova'
+[12:24:46] application-label-az:'Vova'
+[12:24:46] application-label-be:'Vova'
+[12:24:46] application-label-bg:'Vova'
+[12:24:46] application-label-bn:'Vova'
+[12:24:46] application-label-bs:'Vova'
+[12:24:46] application-label-ca:'Vova'
+[12:24:46] application-label-cs:'Vova'
+[12:24:46] application-label-da:'Vova'
+[12:24:46] application-label-de:'Vova'
+[12:24:46] application-label-el:'Vova'
+[12:24:46] application-label-en:'Vova'
+[12:24:46] application-label-en-AU:'Vova'
+[12:24:46] application-label-en-CA:'Vova'
+[12:24:46] application-label-en-GB:'Vova'
+[12:24:46] application-label-en-IN:'Vova'
+[12:24:46] application-label-en-XC:'Vova'
+[12:24:46] application-label-es:'Vova'
+[12:24:46] application-label-es-419:'Vova'
+[12:24:46] application-label-es-ES:'Vova'
+[12:24:46] application-label-es-US:'Vova'
+[12:24:46] application-label-et:'Vova'
+[12:24:46] application-label-eu:'Vova'
+[12:24:46] application-label-fa:'Vova'
+[12:24:46] application-label-fi:'Vova'
+[12:24:46] application-label-fr:'Vova'
+[12:24:46] application-label-fr-CA:'Vova'
+[12:24:46] application-label-gl:'Vova'
+[12:24:46] application-label-gu:'Vova'
+[12:24:46] application-label-hi:'Vova'
+[12:24:46] application-label-hr:'Vova'
+[12:24:46] application-label-hu:'Vova'
+[12:24:46] application-label-hy:'Vova'
+[12:24:46] application-label-id:'Vova'
+[12:24:46] application-label-in:'Vova'
+[12:24:46] application-label-is:'Vova'
+[12:24:46] application-label-it:'Vova'
+[12:24:46] application-label-iw:'Vova'
+[12:24:46] application-label-ja:'Vova'
+[12:24:46] application-label-ka:'Vova'
+[12:24:46] application-label-kk:'Vova'
+[12:24:46] application-label-km:'Vova'
+[12:24:46] application-label-kn:'Vova'
+[12:24:46] application-label-ko:'Vova'
+[12:24:46] application-label-ky:'Vova'
+[12:24:46] application-label-lo:'Vova'
+[12:24:46] application-label-lt:'Vova'
+[12:24:46] application-label-lv:'Vova'
+[12:24:46] application-label-mk:'Vova'
+[12:24:46] application-label-ml:'Vova'
+[12:24:46] application-label-mn:'Vova'
+[12:24:46] application-label-mr:'Vova'
+[12:24:46] application-label-ms:'Vova'
+[12:24:46] application-label-my:'Vova'
+[12:24:46] application-label-nb:'Vova'
+[12:24:46] application-label-ne:'Vova'
+[12:24:46] application-label-nl:'Vova'
+[12:24:46] application-label-or:'Vova'
+[12:24:46] application-label-pa:'Vova'
+[12:24:46] application-label-pl:'Vova'
+[12:24:46] application-label-pt:'Vova'
+[12:24:46] application-label-pt-BR:'Vova'
+[12:24:46] application-label-pt-PT:'Vova'
+[12:24:46] application-label-ro:'Vova'
+[12:24:46] application-label-ru:'Vova'
+[12:24:46] application-label-si:'Vova'
+[12:24:46] application-label-sk:'Vova'
+[12:24:46] application-label-sl:'Vova'
+[12:24:46] application-label-sq:'Vova'
+[12:24:46] application-label-sr:'Vova'
+[12:24:46] application-label-sr-Latn:'Vova'
+[12:24:46] application-label-sv:'Vova'
+[12:24:46] application-label-sw:'Vova'
+[12:24:46] application-label-ta:'Vova'
+[12:24:46] application-label-te:'Vova'
+[12:24:46] application-label-th:'Vova'
+[12:24:46] application-label-tl:'Vova'
+[12:24:46] application-label-tr:'Vova'
+[12:24:46] application-label-uk:'Vova'
+[12:24:46] application-label-ur:'Vova'
+[12:24:46] application-label-uz:'Vova'
+[12:24:46] application-label-vi:'Vova'
+[12:24:46] application-label-zh:'Vova'
+[12:24:46] application-label-zh-CN:'Vova'
+[12:24:46] application-label-zh-HK:'Vova'
+[12:24:46] application-label-zh-TW:'Vova'
+[12:24:46] application-label-zu:'Vova'
+[12:24:46] application-icon-120:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:24:46] application-icon-160:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:24:46] application-icon-240:'res/mipmap-hdpi-v4/ic_launcher.webp'
+[12:24:46] application-icon-320:'res/mipmap-xhdpi-v4/ic_launcher.webp'
+[12:24:46] application-icon-480:'res/mipmap-xxhdpi-v4/ic_launcher.webp'
+[12:24:46] application-icon-640:'res/mipmap-xxxhdpi-v4/ic_launcher.webp'
+[12:24:46] application-icon-65534:'res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:24:46] application: label='Vova' icon='res/mipmap-mdpi-v4/ic_launcher.webp'
+[12:24:46] testOnly='-1'
+[12:24:46] application-debuggable
+[12:24:46] launchable-activity: name='com.vova.app.ui.LauncherActivity'  label='' icon=''
+[12:24:46] uses-library-not-required:'android.ext.adservices'
+[12:24:46] feature-group: label=''
+[12:24:46]   uses-feature-not-required: name='android.hardware.camera'
+[12:24:46]   uses-feature: name='android.hardware.faketouch'
+[12:24:46]   uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+[12:24:46]   uses-feature: name='android.hardware.microphone'
+[12:24:46]   uses-implied-feature: name='android.hardware.microphone' reason='requested android.permission.RECORD_AUDIO permission'
+[12:24:46]   uses-feature: name='android.hardware.screen.portrait'
+[12:24:46]   uses-implied-feature: name='android.hardware.screen.portrait' reason='one or more activities have specified a portrait orientation'
+[12:24:46]   uses-feature: name='android.hardware.wifi'
+[12:24:46]   uses-implied-feature: name='android.hardware.wifi' reason='requested android.permission.ACCESS_WIFI_STATE permission'
+[12:24:46] main
+[12:24:46] other-activities
+[12:24:46] other-receivers
+[12:24:46] other-services
+[12:24:46] supports-screens: 'small' 'normal' 'large' 'xlarge'
+[12:24:46] supports-any-density: 'true'
+[12:24:46] locales: '--_--' 'af' 'am' 'ar' 'as' 'az' 'be' 'bg' 'bn' 'bs' 'ca' 'cs' 'da' 'de' 'el' 'en' 'en-AU' 'en-CA' 'en-GB' 'en-IN' 'en-XC' 'es' 'es-419' 'es-ES' 'es-US' 'et' 'eu' 'fa' 'fi' 'fr' 'fr-CA' 'gl' 'gu' 'hi' 'hr' 'hu' 'hy' 'id' 'in' 'is' 'it' 'iw' 'ja' 'ka' 'kk' 'km' 'kn' 'ko' 'ky' 'lo' 'lt' 'lv' 'mk' 'ml' 'mn' 'mr' 'ms' 'my' 'nb' 'ne' 'nl' 'or' 'pa' 'pl' 'pt' 'pt-BR' 'pt-PT' 'ro' 'ru' 'si' 'sk' 'sl' 'sq' 'sr' 'sr-Latn' 'sv' 'sw' 'ta' 'te' 'th' 'tl' 'tr' 'uk' 'ur' 'uz' 'vi' 'zh' 'zh-CN' 'zh-HK' 'zh-TW' 'zu'
+[12:24:46] densities: '120' '160' '240' '320' '480' '640' '65534'
+[12:24:46] native-code: 'arm64-v8a' 'armeabi-v7a'
+[12:24:51] 开始执行，APK：D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1214-debug.apk
+[12:24:51] [1/1] 处理设备：HUAWEI COL_AL10 | VBJDU19521002427 | device | Android 10 | device:HWCOL | product:COL-AL10
+[12:24:51] 安装 APK...
+[12:24:51] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 install -r -d -t D:\AndroidProject\Vova\app\build\intermediates\apk\debug\Vova-1.3.4-2026_0608_1214-debug.apk
+[12:24:51] Serving...
+[12:25:00] Performing Incremental Install
+[12:25:00] Unknown command: install-incremental
+[12:25:00] Performing Streamed Install
+[12:25:00] Success
+[12:25:00] 安装成功。
+[12:25:00] > C:\Users\Administrator\AppData\Local\Android\Sdk\platform-tools\adb.exe -s VBJDU19521002427 shell am start -n com.vova.app/com.vova.app.ui.LauncherActivity
+[12:25:00] Starting: Intent { cmp=com.vova.app/.ui.LauncherActivity }
+[12:25:00] 启动应用成功。
+[12:25:00] 执行完成：成功 1，失败 0，跳过 0
