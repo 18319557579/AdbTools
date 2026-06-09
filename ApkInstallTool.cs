@@ -27,7 +27,7 @@ namespace ApkInstallTool
         private readonly TabControl tabControl = new TabControl();
         private readonly TabPage installTab = new TabPage("APK 安装");
         private readonly TabPage connectionTab = new TabPage("设备连接");
-        private readonly TabPage logcatTab = new TabPage("日志");
+        private readonly TabPage logRecordTab = new TabPage("日志录制");
         private readonly TextBox apkTextBox = new TextBox();
         private readonly Button browseButton = new Button();
         private readonly Button refreshButton = new Button();
@@ -50,22 +50,11 @@ namespace ApkInstallTool
         private readonly Label statusLabel = new Label();
         private readonly TextBox logBox = new TextBox();
 
-        private readonly TextBox logcatPathTextBox = new TextBox();
-        private readonly Button browseLogcatButton = new Button();
-        private readonly TextBox logcatTagsTextBox = new TextBox();
-        private readonly ComboBox logcatLevelComboBox = new ComboBox();
-        private readonly ComboBox logcatFormatComboBox = new ComboBox();
-        private readonly TextBox logcatRegexTextBox = new TextBox();
-        private readonly TextBox logcatPidTextBox = new TextBox();
-        private readonly TextBox logcatTailTextBox = new TextBox();
-        private readonly CheckBox logcatClearBeforeCheckBox = new CheckBox();
-        private readonly CheckBox logcatBinaryCheckBox = new CheckBox();
-        private readonly Button logcatRecordButton = new Button();
-        private readonly Button logcatStopButton = new Button();
-        private readonly Button logcatDumpButton = new Button();
-        private readonly Button logcatClearCacheButton = new Button();
-        private readonly Button logcatPauseDisplayButton = new Button();
-        private readonly TextBox logcatPreviewBox = new TextBox();
+        private readonly TextBox logRecordPathTextBox = new TextBox();
+        private readonly Button browseLogRecordFileButton = new Button();
+        private readonly Button browseLogRecordFolderButton = new Button();
+        private readonly Button startLogRecordButton = new Button();
+        private readonly Button stopLogRecordButton = new Button();
 
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
         private readonly object processLock = new object();
@@ -80,7 +69,6 @@ namespace ApkInstallTool
         private volatile bool isExecuting;
         private volatile bool isDeviceCommandRunning;
         private volatile bool isLogcatRunning;
-        private volatile bool isLogcatPreviewPaused;
         private ApkInfo currentApkInfo;
 
         public MainForm()
@@ -120,11 +108,11 @@ namespace ApkInstallTool
             tabControl.Dock = DockStyle.Fill;
             tabControl.TabPages.Add(installTab);
             tabControl.TabPages.Add(connectionTab);
-            tabControl.TabPages.Add(logcatTab);
+            tabControl.TabPages.Add(logRecordTab);
             root.Controls.Add(tabControl, 0, 0);
             BuildInstallTab();
             BuildConnectionTab();
-            BuildLogcatTab();
+            BuildLogRecordTab();
             BuildSharedDeviceArea(root);
             BuildSharedLogArea(root);
         }
@@ -261,120 +249,64 @@ namespace ApkInstallTool
             panel.Controls.Add(hint, 0, 2);
         }
 
-        private void BuildLogcatTab()
+        private void BuildLogRecordTab()
         {
-            logcatTab.Padding = new Padding(10);
+            logRecordTab.Padding = new Padding(10);
             var panel = new TableLayoutPanel();
-            panel.Dock = DockStyle.Fill;
+            panel.Dock = DockStyle.Top;
+            panel.Height = 118;
             panel.ColumnCount = 1;
-            panel.RowCount = 5;
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowCount = 3;
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            logcatTab.Controls.Add(panel);
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            logRecordTab.Controls.Add(panel);
 
-            var filePanel = new TableLayoutPanel();
-            filePanel.Dock = DockStyle.Fill;
-            filePanel.ColumnCount = 3;
-            filePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            filePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            filePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            panel.Controls.Add(filePanel, 0, 0);
-            var fileLabel = new Label();
-            fileLabel.Text = "保存路径";
-            fileLabel.Dock = DockStyle.Fill;
-            fileLabel.TextAlign = ContentAlignment.MiddleLeft;
-            filePanel.Controls.Add(fileLabel, 0, 0);
-            logcatPathTextBox.Dock = DockStyle.Fill;
-            logcatPathTextBox.Margin = new Padding(0, 4, 8, 4);
-            filePanel.Controls.Add(logcatPathTextBox, 1, 0);
-            browseLogcatButton.Text = "选择...";
-            browseLogcatButton.Dock = DockStyle.Fill;
-            browseLogcatButton.Margin = new Padding(0, 3, 0, 3);
-            filePanel.Controls.Add(browseLogcatButton, 2, 0);
+            var pathPanel = new TableLayoutPanel();
+            pathPanel.Dock = DockStyle.Fill;
+            pathPanel.ColumnCount = 4;
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
+            panel.Controls.Add(pathPanel, 0, 0);
 
-            var filterPanel = new TableLayoutPanel();
-            filterPanel.Dock = DockStyle.Fill;
-            filterPanel.ColumnCount = 8;
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 54));
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
-            filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-            panel.Controls.Add(filterPanel, 0, 1);
-            AddLabel(filterPanel, "Tag", 0);
-            logcatTagsTextBox.Dock = DockStyle.Fill;
-            logcatTagsTextBox.Margin = new Padding(0, 4, 8, 4);
-            filterPanel.Controls.Add(logcatTagsTextBox, 1, 0);
-            AddLabel(filterPanel, "等级", 2);
-            logcatLevelComboBox.Dock = DockStyle.Fill;
-            filterPanel.Controls.Add(logcatLevelComboBox, 3, 0);
-            AddLabel(filterPanel, "格式", 4);
-            logcatFormatComboBox.Dock = DockStyle.Fill;
-            filterPanel.Controls.Add(logcatFormatComboBox, 5, 0);
-            AddLabel(filterPanel, "正则", 6);
-            logcatRegexTextBox.Dock = DockStyle.Fill;
-            logcatRegexTextBox.Margin = new Padding(0, 4, 0, 4);
-            filterPanel.Controls.Add(logcatRegexTextBox, 7, 0);
-
-            var optionPanel = new TableLayoutPanel();
-            optionPanel.Dock = DockStyle.Fill;
-            optionPanel.ColumnCount = 7;
-            optionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 54));
-            optionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            optionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            optionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            optionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
-            optionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 98));
-            optionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(optionPanel, 0, 2);
-            AddLabel(optionPanel, "PID", 0);
-            logcatPidTextBox.Dock = DockStyle.Fill;
-            logcatPidTextBox.Margin = new Padding(0, 4, 8, 4);
-            optionPanel.Controls.Add(logcatPidTextBox, 1, 0);
-            AddLabel(optionPanel, "最近行", 2);
-            logcatTailTextBox.Dock = DockStyle.Fill;
-            logcatTailTextBox.Margin = new Padding(0, 4, 8, 4);
-            optionPanel.Controls.Add(logcatTailTextBox, 3, 0);
-            logcatClearBeforeCheckBox.Text = "先清空缓存";
-            logcatClearBeforeCheckBox.AutoSize = true;
-            logcatClearBeforeCheckBox.Margin = new Padding(0, 9, 8, 0);
-            optionPanel.Controls.Add(logcatClearBeforeCheckBox, 4, 0);
-            logcatBinaryCheckBox.Text = "二进制";
-            logcatBinaryCheckBox.AutoSize = true;
-            logcatBinaryCheckBox.Margin = new Padding(0, 9, 8, 0);
-            optionPanel.Controls.Add(logcatBinaryCheckBox, 5, 0);
+            var pathLabel = new Label();
+            pathLabel.Text = "输出路径";
+            pathLabel.Dock = DockStyle.Fill;
+            pathLabel.TextAlign = ContentAlignment.MiddleLeft;
+            pathPanel.Controls.Add(pathLabel, 0, 0);
+            logRecordPathTextBox.Dock = DockStyle.Fill;
+            logRecordPathTextBox.Margin = new Padding(0, 4, 8, 4);
+            pathPanel.Controls.Add(logRecordPathTextBox, 1, 0);
+            browseLogRecordFileButton.Text = "选择文件";
+            browseLogRecordFileButton.Dock = DockStyle.Fill;
+            browseLogRecordFileButton.Margin = new Padding(0, 3, 8, 3);
+            pathPanel.Controls.Add(browseLogRecordFileButton, 2, 0);
+            browseLogRecordFolderButton.Text = "选择文件夹";
+            browseLogRecordFolderButton.Dock = DockStyle.Fill;
+            browseLogRecordFolderButton.Margin = new Padding(0, 3, 0, 3);
+            pathPanel.Controls.Add(browseLogRecordFolderButton, 3, 0);
 
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
-            actionPanel.ColumnCount = 6;
-            for (var i = 0; i < 5; i++) actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            actionPanel.ColumnCount = 3;
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(actionPanel, 0, 3);
-            logcatRecordButton.Text = "开始录制";
-            logcatStopButton.Text = "停止录制";
-            logcatDumpButton.Text = "导出缓存";
-            logcatClearCacheButton.Text = "清空缓存";
-            logcatPauseDisplayButton.Text = "暂停显示";
-            AddActionButton(actionPanel, logcatRecordButton, 0);
-            AddActionButton(actionPanel, logcatStopButton, 1);
-            AddActionButton(actionPanel, logcatDumpButton, 2);
-            AddActionButton(actionPanel, logcatClearCacheButton, 3);
-            AddActionButton(actionPanel, logcatPauseDisplayButton, 4);
-            logcatStopButton.Enabled = false;
+            panel.Controls.Add(actionPanel, 0, 1);
+            startLogRecordButton.Text = "开始录制";
+            stopLogRecordButton.Text = "退出录制";
+            AddActionButton(actionPanel, startLogRecordButton, 0);
+            AddActionButton(actionPanel, stopLogRecordButton, 1);
+            stopLogRecordButton.Enabled = false;
 
-            logcatPreviewBox.Dock = DockStyle.Fill;
-            logcatPreviewBox.Multiline = true;
-            logcatPreviewBox.ReadOnly = true;
-            logcatPreviewBox.ScrollBars = ScrollBars.Both;
-            logcatPreviewBox.WordWrap = false;
-            logcatPreviewBox.Font = new Font("Consolas", 9F);
-            panel.Controls.Add(logcatPreviewBox, 0, 4);
+            var hint = new Label();
+            hint.Text = "可输入文件或文件夹路径；文件夹会自动保存为 log.txt。录制设备取自下方目标设备列表。";
+            hint.Dock = DockStyle.Fill;
+            hint.TextAlign = ContentAlignment.MiddleLeft;
+            hint.ForeColor = Color.FromArgb(80, 80, 80);
+            panel.Controls.Add(hint, 0, 2);
         }
 
         private void AddLabel(TableLayoutPanel panel, string text, int column)
@@ -478,12 +410,10 @@ namespace ApkInstallTool
             deviceList.ItemCheck += delegate { BeginSyncAddressFromCurrentDevice(); };
             deviceList.Click += delegate { BeginSyncAddressFromCurrentDevice(); };
             deviceList.MouseUp += delegate { BeginSyncAddressFromCurrentDevice(); };
-            browseLogcatButton.Click += delegate { BrowseLogcatFile(); };
-            logcatRecordButton.Click += delegate { StartLogcatRecording(); };
-            logcatStopButton.Click += delegate { StopLogcatRecording(); };
-            logcatDumpButton.Click += delegate { DumpLogcatOnce(); };
-            logcatClearCacheButton.Click += delegate { ClearLogcatCache(); };
-            logcatPauseDisplayButton.Click += delegate { ToggleLogcatPreview(); };
+            browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
+            browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
+            startLogRecordButton.Click += delegate { StartLogRecording(); };
+            stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
             DragEnter += OnDragEnter;
             DragDrop += OnDragDrop;
             FormClosing += OnFormClosing;
@@ -491,56 +421,66 @@ namespace ApkInstallTool
 
         private void InitLogcatDefaults()
         {
-            logcatPathTextBox.Text = Path.Combine(logDir, "logcat-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt");
-            logcatLevelComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            logcatLevelComboBox.Items.AddRange(new object[] { "全部", "V", "D", "I", "W", "E", "F", "S" });
-            logcatLevelComboBox.SelectedIndex = 0;
-            logcatFormatComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            logcatFormatComboBox.Items.AddRange(new object[] { "threadtime", "time", "thread", "brief", "process", "tag", "raw", "long", "color" });
-            logcatFormatComboBox.SelectedIndex = 0;
+            logRecordPathTextBox.Text = logDir;
         }
 
-        private void BrowseLogcatFile()
+        private void BrowseLogRecordFile()
         {
             using (var dialog = new SaveFileDialog())
             {
-                dialog.Title = "选择日志保存路径";
+                dialog.Title = "选择日志输出文件";
                 dialog.Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*";
-                dialog.FileName = Path.GetFileName(logcatPathTextBox.Text);
-                var currentDir = Path.GetDirectoryName(ResolveOutputPath(logcatPathTextBox.Text));
+                dialog.FileName = "log.txt";
+                var currentDir = GetInitialDirectoryFromPath(logRecordPathTextBox.Text);
                 if (!string.IsNullOrEmpty(currentDir)) dialog.InitialDirectory = currentDir;
-                if (dialog.ShowDialog(this) == DialogResult.OK) logcatPathTextBox.Text = dialog.FileName;
+                if (dialog.ShowDialog(this) == DialogResult.OK) logRecordPathTextBox.Text = dialog.FileName;
             }
         }
 
-        private void StartLogcatRecording()
+        private void BrowseLogRecordFolder()
+        {
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "选择日志输出文件夹";
+                var currentDir = GetInitialDirectoryFromPath(logRecordPathTextBox.Text);
+                if (!string.IsNullOrEmpty(currentDir)) dialog.SelectedPath = currentDir;
+                if (dialog.ShowDialog(this) == DialogResult.OK) logRecordPathTextBox.Text = dialog.SelectedPath;
+            }
+        }
+
+        private void StartLogRecording()
         {
             if (isLogcatRunning) return;
-            var device = GetSingleSelectedDevice();
+            var device = GetSingleCheckedDeviceForLogRecording();
             if (device == null) return;
-            var outputPath = PrepareLogcatOutputPath();
+            var outputPath = PrepareLogRecordOutputPath();
             if (outputPath == null) return;
+            var args = BuildSimpleLogRecordArgs(device.Serial);
+            StartLogcatProcess(device, outputPath, args, false, "开始日志录制：");
+        }
+
+        private void StartLogcatProcess(DeviceInfo device, string outputPath, List<string> args, bool clearBefore, string startMessage)
+        {
             var adb = FindAdb();
             if (adb == null)
             {
                 MessageBox.Show(this, "未找到 adb.exe。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-            if (logcatClearBeforeCheckBox.Checked)
+            if (clearBefore)
             {
                 InvokeProcess(adb, new[] { "-s", device.Serial, "logcat", "-c" }, false);
             }
-            var args = BuildLogcatArgs(device.Serial, false);
             isLogcatRunning = true;
             SetLogcatUi(true);
-            logcatPreviewBox.Clear();
-            AddLogLine("开始录制 logcat：" + outputPath);
+            SetStatus("正在录制日志...");
+            AddLogLine(startMessage + outputPath);
             try
             {
                 logcatWriter = new StreamWriter(outputPath, false, Encoding.UTF8);
                 var process = CreateAdbProcess(adb, args.ToArray());
-                process.OutputDataReceived += OnLogcatData;
-                process.ErrorDataReceived += OnLogcatData;
+                process.OutputDataReceived += WriteLogcatData;
+                process.ErrorDataReceived += WriteLogcatData;
                 process.EnableRaisingEvents = true;
                 process.Exited += delegate { FinishLogcatRecording(); };
                 logcatProcess = process;
@@ -576,98 +516,38 @@ namespace ApkInstallTool
             BeginInvokeIfNeeded(delegate
             {
                 SetLogcatUi(false);
+                SetStatus("日志录制已停止。");
                 AddLogLine("logcat 录制已停止。");
             });
         }
 
-        private void DumpLogcatOnce()
-        {
-            var device = GetSingleSelectedDevice();
-            if (device == null) return;
-            var outputPath = PrepareLogcatOutputPath();
-            if (outputPath == null) return;
-            var adb = FindAdb();
-            if (adb == null)
-            {
-                MessageBox.Show(this, "未找到 adb.exe。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            if (logcatClearBeforeCheckBox.Checked)
-            {
-                InvokeProcess(adb, new[] { "-s", device.Serial, "logcat", "-c" }, false);
-            }
-            var args = BuildLogcatArgs(device.Serial, true);
-            AddLogLine("导出 logcat 缓存：" + outputPath);
-            var thread = new Thread(new ThreadStart(delegate
-            {
-                var result = InvokeProcess(adb, args.ToArray(), false);
-                try
-                {
-                    File.WriteAllText(outputPath, result.Output, Encoding.UTF8);
-                    BeginInvokeIfNeeded(delegate { logcatPreviewBox.Text = result.Output; });
-                    AddLogLine("logcat 缓存导出完成。");
-                }
-                catch (Exception ex)
-                {
-                    AddLogLine("写入 logcat 文件失败：" + ex.Message);
-                }
-            }));
-            thread.IsBackground = true;
-            thread.Start();
-        }
-
-        private void ClearLogcatCache()
-        {
-            var device = GetSingleSelectedDevice();
-            if (device == null) return;
-            var adb = FindAdb();
-            if (adb == null)
-            {
-                MessageBox.Show(this, "未找到 adb.exe。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            var result = InvokeProcess(adb, new[] { "-s", device.Serial, "logcat", "-c" }, false);
-            AddLogLine(result.ExitCode == 0 ? "logcat 缓存已清空。" : "清空 logcat 缓存失败：" + result.Output);
-        }
-
-        private void ToggleLogcatPreview()
-        {
-            isLogcatPreviewPaused = !isLogcatPreviewPaused;
-            logcatPauseDisplayButton.Text = isLogcatPreviewPaused ? "继续显示" : "暂停显示";
-        }
-
-        private void OnLogcatData(object sender, DataReceivedEventArgs e)
+        private void WriteLogcatData(object sender, DataReceivedEventArgs e)
         {
             if (e.Data == null) return;
             lock (logcatLock)
             {
                 try { if (logcatWriter != null) { logcatWriter.WriteLine(e.Data); logcatWriter.Flush(); } } catch { }
             }
-            if (!isLogcatPreviewPaused)
-            {
-                BeginInvokeIfNeeded(delegate
-                {
-                    if (logcatPreviewBox.TextLength > 200000) logcatPreviewBox.Clear();
-                    logcatPreviewBox.AppendText(e.Data + Environment.NewLine);
-                });
-            }
         }
 
         private void SetLogcatUi(bool running)
         {
-            logcatRecordButton.Enabled = !running;
-            logcatDumpButton.Enabled = !running;
-            logcatClearCacheButton.Enabled = !running;
-            logcatStopButton.Enabled = running;
-            browseLogcatButton.Enabled = !running;
+            startLogRecordButton.Enabled = !running;
+            stopLogRecordButton.Enabled = running;
+            browseLogRecordFileButton.Enabled = !running;
+            browseLogRecordFolderButton.Enabled = !running;
+            logRecordPathTextBox.Enabled = !running;
+            refreshButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
+            toggleDevicesButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
+            deviceList.Enabled = !running && !isExecuting;
         }
 
-        private string PrepareLogcatOutputPath()
+        private string PrepareLogRecordOutputPath()
         {
-            var path = ResolveOutputPath(logcatPathTextBox.Text);
+            var path = ResolveLogRecordOutputPath(logRecordPathTextBox.Text);
             if (string.IsNullOrWhiteSpace(path))
             {
-                MessageBox.Show(this, "请输入日志保存路径。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请输入日志输出路径。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             try
@@ -678,7 +558,7 @@ namespace ApkInstallTool
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "无法创建日志目录：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "无法创建日志输出目录：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
         }
@@ -690,72 +570,51 @@ namespace ApkInstallTool
             return Path.IsPathRooted(path) ? path : Path.GetFullPath(Path.Combine(appDir, path));
         }
 
-        private List<string> BuildLogcatArgs(string serial, bool dumpOnce)
+        private string ResolveLogRecordOutputPath(string path)
         {
-            var args = new List<string> { "-s", serial, "logcat" };
-            if (dumpOnce) args.Add("-d");
-            var tail = logcatTailTextBox.Text.Trim();
-            if (tail.Length > 0)
-            {
-                int count;
-                if (int.TryParse(tail, out count) && count > 0)
-                {
-                    args.Add("-t");
-                    args.Add(count.ToString());
-                }
-            }
-            if (logcatBinaryCheckBox.Checked) args.Add("-B");
-            var format = logcatFormatComboBox.SelectedItem == null ? "threadtime" : logcatFormatComboBox.SelectedItem.ToString();
-            if (format == "color")
-            {
-                args.Add("--format=color");
-            }
-            else if (!string.IsNullOrWhiteSpace(format))
-            {
-                args.Add("-v");
-                args.Add(format);
-            }
-            var regex = logcatRegexTextBox.Text.Trim();
-            if (regex.Length > 0)
-            {
-                args.Add("-e");
-                args.Add(regex);
-            }
-            var pid = logcatPidTextBox.Text.Trim();
-            if (pid.Length > 0) args.Add("--pid=" + pid);
-            foreach (var tag in SplitTokenList(logcatTagsTextBox.Text))
-            {
-                args.Add("-s");
-                args.Add(tag);
-            }
-            var level = logcatLevelComboBox.SelectedItem == null ? "全部" : logcatLevelComboBox.SelectedItem.ToString();
-            if (level != "全部") args.Add("*:" + level);
-            return args;
+            var resolved = ResolveOutputPath(path);
+            if (string.IsNullOrWhiteSpace(resolved)) return null;
+            if (Directory.Exists(resolved) || IsDirectoryLikePath(resolved)) return Path.Combine(resolved, "log.txt");
+            return resolved;
         }
 
-        private IEnumerable<string> SplitTokenList(string text)
+        private string GetInitialDirectoryFromPath(string path)
         {
-            return (text ?? "").Split(new[] { ',', ';', ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var resolved = ResolveOutputPath(path);
+            if (string.IsNullOrWhiteSpace(resolved)) return Directory.Exists(logDir) ? logDir : appDir;
+            if (Directory.Exists(resolved)) return resolved;
+            var dir = Path.GetDirectoryName(resolved);
+            return !string.IsNullOrEmpty(dir) && Directory.Exists(dir) ? dir : appDir;
         }
 
-        private DeviceInfo GetSingleSelectedDevice()
+        private static bool IsDirectoryLikePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            var trimmed = path.Trim();
+            if (trimmed.EndsWith(Path.DirectorySeparatorChar.ToString()) || trimmed.EndsWith(Path.AltDirectorySeparatorChar.ToString())) return true;
+            return string.IsNullOrEmpty(Path.GetExtension(trimmed));
+        }
+
+        private List<string> BuildSimpleLogRecordArgs(string serial)
+        {
+            return new List<string> { "-s", serial, "logcat", "-v", "threadtime" };
+        }
+
+        private DeviceInfo GetSingleCheckedDeviceForLogRecording()
         {
             var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
-            string label = null;
-            if (checkedItems.Count == 1) label = checkedItems[0];
-            else if (checkedItems.Count == 0 && deviceList.SelectedItem != null) label = deviceList.SelectedItem.ToString();
-            else if (checkedItems.Count > 1)
+            if (checkedItems.Count == 0)
             {
-                MessageBox.Show(this, "日志功能一次只能选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
-            if (label == null)
+            if (checkedItems.Count > 1)
             {
-                MessageBox.Show(this, "请先选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "只能同时录制一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             DeviceInfo device;
-            if (!deviceMap.TryGetValue(label, out device) || device.State != "device")
+            if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
             {
                 MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
@@ -859,10 +718,11 @@ namespace ApkInstallTool
             connectButton.Enabled = !running && !isExecuting;
             disconnectButton.Enabled = !running && !isExecuting;
             clearAddressButton.Enabled = !running && !isExecuting;
-            refreshButton.Enabled = !running && !isExecuting;
-            toggleDevicesButton.Enabled = !running && !isExecuting;
+            refreshButton.Enabled = !running && !isExecuting && !isLogcatRunning;
+            toggleDevicesButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             connectAddressTextBox.Enabled = !running && !isExecuting;
             cancelButton.Enabled = running || isExecuting;
+            startLogRecordButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
         }
 
@@ -1185,7 +1045,12 @@ namespace ApkInstallTool
 
         private void RequestCancel()
         {
-            if (!isExecuting && !isDeviceCommandRunning) { Close(); return; }
+            if (!isExecuting && !isDeviceCommandRunning)
+            {
+                if (isLogcatRunning) StopLogcatRecording();
+                else Close();
+                return;
+            }
             cancelRequested = true;
             cancelButton.Enabled = false;
             statusLabel.Text = "正在中止...";
@@ -1238,6 +1103,11 @@ namespace ApkInstallTool
             apkTextBox.Enabled = !executing;
             deviceList.Enabled = !executing && !isLogcatRunning;
             launchAfterInstallCheckBox.Enabled = !executing && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
+            startLogRecordButton.Enabled = !executing && !isLogcatRunning;
+            stopLogRecordButton.Enabled = isLogcatRunning;
+            logRecordPathTextBox.Enabled = !executing && !isLogcatRunning;
+            browseLogRecordFileButton.Enabled = !executing && !isLogcatRunning;
+            browseLogRecordFolderButton.Enabled = !executing && !isLogcatRunning;
             cancelButton.Enabled = executing || isDeviceCommandRunning;
             Cursor = executing ? Cursors.WaitCursor : Cursors.Default;
             statusLabel.Text = executing ? "正在执行..." : statusLabel.Text;

@@ -1,0 +1,27 @@
+# Local runtime configuration
+install-apk.config.json
+
+# Runtime logs
+log/
+*.log
+
+# Local executable backups
+*.bak
+*.bak-*
+*.backup
+
+# Build intermediates
+bin/
+obj/
+*.pdb
+*.ilk
+*.tmp
+*.temp
+
+# User/editor files
+.vs/
+.vscode/
+*.user
+*.suo
+Thumbs.db
+Desktop.ini
