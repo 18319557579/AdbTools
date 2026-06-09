@@ -52,6 +52,7 @@ namespace ApkInstallTool
 
         private readonly TextBox logRecordPathTextBox = new TextBox();
         private readonly TextBox logRecordTagTextBox = new TextBox();
+        private readonly ComboBox logRecordLevelComboBox = new ComboBox();
         private readonly Button browseLogRecordFileButton = new Button();
         private readonly Button browseLogRecordFolderButton = new Button();
         private readonly Button startLogRecordButton = new Button();
@@ -292,9 +293,11 @@ namespace ApkInstallTool
 
             var tagPanel = new TableLayoutPanel();
             tagPanel.Dock = DockStyle.Fill;
-            tagPanel.ColumnCount = 2;
+            tagPanel.ColumnCount = 4;
             tagPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
             tagPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            tagPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            tagPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
             panel.Controls.Add(tagPanel, 0, 1);
 
             var tagLabel = new Label();
@@ -303,8 +306,26 @@ namespace ApkInstallTool
             tagLabel.TextAlign = ContentAlignment.MiddleLeft;
             tagPanel.Controls.Add(tagLabel, 0, 0);
             logRecordTagTextBox.Dock = DockStyle.Fill;
-            logRecordTagTextBox.Margin = new Padding(0, 4, 0, 4);
+            logRecordTagTextBox.Margin = new Padding(0, 4, 8, 4);
             tagPanel.Controls.Add(logRecordTagTextBox, 1, 0);
+            var levelLabel = new Label();
+            levelLabel.Text = "\u65e5\u5fd7\u7b49\u7ea7";
+            levelLabel.Dock = DockStyle.Fill;
+            levelLabel.TextAlign = ContentAlignment.MiddleLeft;
+            tagPanel.Controls.Add(levelLabel, 2, 0);
+            logRecordLevelComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            logRecordLevelComboBox.Dock = DockStyle.Fill;
+            logRecordLevelComboBox.Margin = new Padding(0, 4, 0, 4);
+            logRecordLevelComboBox.Items.AddRange(new object[]
+            {
+                "\u5168\u90e8 Verbose (V)",
+                "\u8c03\u8bd5 Debug (D)",
+                "\u4fe1\u606f Info (I)",
+                "\u8b66\u544a Warn (W)",
+                "\u9519\u8bef Error (E)",
+                "\u4e25\u91cd Fatal (F)"
+            });
+            tagPanel.Controls.Add(logRecordLevelComboBox, 3, 0);
 
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
@@ -440,6 +461,7 @@ namespace ApkInstallTool
         private void InitLogcatDefaults()
         {
             logRecordPathTextBox.Text = logDir;
+            logRecordLevelComboBox.SelectedIndex = 0;
         }
 
         private void BrowseLogRecordFile()
@@ -475,7 +497,7 @@ namespace ApkInstallTool
             if (outputPath == null) return;
             List<string> tags;
             if (!TryGetLogRecordTags(out tags)) return;
-            var args = BuildSimpleLogRecordArgs(device.Serial, tags);
+            var args = BuildSimpleLogRecordArgs(device.Serial, tags, GetSelectedLogRecordLevel());
             StartLogcatProcess(device, outputPath, args, false, "开始日志录制：");
         }
 
@@ -558,6 +580,7 @@ namespace ApkInstallTool
             browseLogRecordFolderButton.Enabled = !running;
             logRecordPathTextBox.Enabled = !running;
             logRecordTagTextBox.Enabled = !running;
+            logRecordLevelComboBox.Enabled = !running;
             refreshButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             toggleDevicesButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             deviceList.Enabled = !running && !isExecuting;
@@ -621,15 +644,28 @@ namespace ApkInstallTool
             return string.IsNullOrEmpty(Path.GetExtension(trimmed));
         }
 
-        private List<string> BuildSimpleLogRecordArgs(string serial, List<string> tags)
+        private List<string> BuildSimpleLogRecordArgs(string serial, List<string> tags, string level)
         {
+            if (string.IsNullOrWhiteSpace(level)) level = "V";
             var args = new List<string> { "-s", serial, "logcat", "-v", "threadtime" };
             if (tags != null && tags.Count > 0)
             {
-                foreach (var tag in tags) args.Add(tag + ":V");
+                foreach (var tag in tags) args.Add(tag + ":" + level);
                 args.Add("*:S");
             }
+            else
+            {
+                args.Add("*:" + level);
+            }
             return args;
+        }
+
+        private string GetSelectedLogRecordLevel()
+        {
+            var selected = logRecordLevelComboBox.SelectedItem as string;
+            if (string.IsNullOrEmpty(selected)) return "V";
+            var match = Regex.Match(selected, @"\(([VDIWEF])\)");
+            return match.Success ? match.Groups[1].Value : "V";
         }
 
         private bool TryGetLogRecordTags(out List<string> tags)
@@ -1159,6 +1195,8 @@ namespace ApkInstallTool
             startLogRecordButton.Enabled = !executing && !isLogcatRunning;
             stopLogRecordButton.Enabled = isLogcatRunning;
             logRecordPathTextBox.Enabled = !executing && !isLogcatRunning;
+            logRecordTagTextBox.Enabled = !executing && !isLogcatRunning;
+            logRecordLevelComboBox.Enabled = !executing && !isLogcatRunning;
             browseLogRecordFileButton.Enabled = !executing && !isLogcatRunning;
             browseLogRecordFolderButton.Enabled = !executing && !isLogcatRunning;
             cancelButton.Enabled = executing || isDeviceCommandRunning;
