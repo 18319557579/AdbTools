@@ -56,6 +56,7 @@ namespace ApkInstallTool
         private readonly Button browseLogRecordFileButton = new Button();
         private readonly Button browseLogRecordFolderButton = new Button();
         private readonly Button clearLogcatCacheButton = new Button();
+        private readonly Button exportLogcatCacheButton = new Button();
         private readonly Button startLogRecordButton = new Button();
         private readonly Button stopLogRecordButton = new Button();
 
@@ -346,18 +347,21 @@ namespace ApkInstallTool
 
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
-            actionPanel.ColumnCount = 4;
+            actionPanel.ColumnCount = 5;
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.Controls.Add(actionPanel, 0, 3);
             clearLogcatCacheButton.Text = "清除缓存";
+            exportLogcatCacheButton.Text = "导出缓存";
             startLogRecordButton.Text = "开始录制";
             stopLogRecordButton.Text = "退出录制";
             AddActionButton(actionPanel, clearLogcatCacheButton, 0);
-            AddActionButton(actionPanel, startLogRecordButton, 1);
-            AddActionButton(actionPanel, stopLogRecordButton, 2);
+            AddActionButton(actionPanel, exportLogcatCacheButton, 1);
+            AddActionButton(actionPanel, startLogRecordButton, 2);
+            AddActionButton(actionPanel, stopLogRecordButton, 3);
             stopLogRecordButton.Enabled = false;
 
             var hint = new Label();
@@ -471,6 +475,7 @@ namespace ApkInstallTool
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
             clearLogcatCacheButton.Click += delegate { ClearLogcatCache(); };
+            exportLogcatCacheButton.Click += delegate { ExportLogcatCache(); };
             startLogRecordButton.Click += delegate { StartLogRecording(); };
             stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
             logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
@@ -532,6 +537,65 @@ namespace ApkInstallTool
             var device = GetSingleCheckedDeviceForLogRecording();
             if (device == null) return;
             RunDeviceCommand("清除日志缓存", new[] { "-s", device.Serial, "logcat", "-c" });
+        }
+
+        private void ExportLogcatCache()
+        {
+            if (isLogcatRunning || isExecuting || isDeviceCommandRunning) return;
+            var device = GetSingleCheckedDeviceForLogRecording();
+            if (device == null) return;
+            var outputPath = PrepareLogRecordOutputPath();
+            if (outputPath == null) return;
+            List<string> tags;
+            if (!TryGetLogRecordTags(out tags)) return;
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                MessageBox.Show(this, "未找到 adb.exe。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            SaveConfig();
+            var args = BuildLogcatCacheExportArgs(device.Serial, tags, GetSelectedLogRecordLevel());
+            var packageName = GetLogRecordPackageName();
+            cancelRequested = false;
+            isDeviceCommandRunning = true;
+            SetDeviceCommandUi(true);
+            SetStatus("正在导出日志缓存...");
+            AddLogLine("导出日志缓存：" + outputPath);
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                try
+                {
+                    var pidFilter = ResolveLogRecordPidFilter(adb, device.Serial, packageName);
+                    var result = ExportLogcatCacheToFile(adb, args.ToArray(), outputPath, pidFilter);
+                    if (result.Canceled)
+                    {
+                        AddLogLine("导出日志缓存已中止。");
+                        SetStatus("导出日志缓存已中止。");
+                    }
+                    else if (result.ExitCode == 0)
+                    {
+                        var summary = "日志缓存已导出：" + outputPath;
+                        AddLogLine(summary);
+                        SetStatus(summary);
+                    }
+                    else
+                    {
+                        var error = FirstUsefulLine(result.Output) ?? "导出失败。";
+                        AddLogLine("导出日志缓存失败：" + error);
+                        SetStatus("导出日志缓存失败");
+                    }
+                }
+                finally
+                {
+                    isDeviceCommandRunning = false;
+                    cancelRequested = false;
+                    BeginInvokeIfNeeded(delegate { SetDeviceCommandUi(false); });
+                }
+            }));
+            thread.IsBackground = true;
+            thread.Start();
         }
 
         private void StartLogcatProcess(DeviceInfo device, string outputPath, List<string> args, bool clearBefore, string startMessage, string packageName)
@@ -685,14 +749,20 @@ namespace ApkInstallTool
 
         private bool ShouldWriteLogcatLine(string line)
         {
-            if (logcatPidFilter == null || logcatPidFilter.Count == 0) return true;
+            return ShouldWriteLogcatLine(line, logcatPidFilter);
+        }
+
+        private static bool ShouldWriteLogcatLine(string line, HashSet<string> pidFilter)
+        {
+            if (pidFilter == null || pidFilter.Count == 0) return true;
             var match = Regex.Match(line, @"^\S+\s+\S+\s+(?<pid>\d+)\s+");
-            return match.Success && logcatPidFilter.Contains(match.Groups["pid"].Value);
+            return match.Success && pidFilter.Contains(match.Groups["pid"].Value);
         }
 
         private void SetLogcatUi(bool running)
         {
             clearLogcatCacheButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
+            exportLogcatCacheButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             startLogRecordButton.Enabled = !running;
             stopLogRecordButton.Enabled = running;
             browseLogRecordFileButton.Enabled = !running;
@@ -768,6 +838,20 @@ namespace ApkInstallTool
         {
             if (string.IsNullOrWhiteSpace(level)) level = "V";
             var args = new List<string> { "-s", serial, "logcat", "-v", "threadtime" };
+            AddLogRecordFilters(args, tags, level);
+            return args;
+        }
+
+        private List<string> BuildLogcatCacheExportArgs(string serial, List<string> tags, string level)
+        {
+            if (string.IsNullOrWhiteSpace(level)) level = "V";
+            var args = new List<string> { "-s", serial, "logcat", "-d", "-v", "threadtime" };
+            AddLogRecordFilters(args, tags, level);
+            return args;
+        }
+
+        private static void AddLogRecordFilters(List<string> args, List<string> tags, string level)
+        {
             if (tags != null && tags.Count > 0)
             {
                 foreach (var tag in tags) args.Add(tag + ":" + level);
@@ -777,7 +861,6 @@ namespace ApkInstallTool
             {
                 args.Add("*:" + level);
             }
-            return args;
         }
 
         private string GetSelectedLogRecordLevel()
@@ -947,7 +1030,15 @@ namespace ApkInstallTool
             connectAddressTextBox.Enabled = !running && !isExecuting;
             cancelButton.Enabled = running || isExecuting;
             clearLogcatCacheButton.Enabled = !running && !isExecuting && !isLogcatRunning;
+            exportLogcatCacheButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             startLogRecordButton.Enabled = !running && !isExecuting && !isLogcatRunning;
+            browseLogRecordFileButton.Enabled = !running && !isExecuting && !isLogcatRunning;
+            browseLogRecordFolderButton.Enabled = !running && !isExecuting && !isLogcatRunning;
+            logRecordPathTextBox.Enabled = !running && !isExecuting && !isLogcatRunning;
+            logRecordTagTextBox.Enabled = !running && !isExecuting && !isLogcatRunning;
+            logRecordPackageTextBox.Enabled = !running && !isExecuting && !isLogcatRunning;
+            logRecordLevelComboBox.Enabled = !running && !isExecuting && !isLogcatRunning;
+            deviceList.Enabled = !running && !isExecuting && !isLogcatRunning;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
         }
 
@@ -1373,6 +1464,40 @@ namespace ApkInstallTool
             finally { try { process.Dispose(); } catch { } }
         }
 
+        private ProcessResult ExportLogcatCacheToFile(string filePath, string[] arguments, string outputPath, HashSet<string> pidFilter)
+        {
+            var outputBuilder = new StringBuilder();
+            var process = CreateAdbProcess(filePath, arguments);
+            try
+            {
+                using (var writer = new StreamWriter(outputPath, false, Encoding.UTF8))
+                {
+                    process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                    {
+                        if (e.Data == null) return;
+                        if (ShouldWriteLogcatLine(e.Data, pidFilter))
+                        {
+                            lock (writer) writer.WriteLine(e.Data);
+                        }
+                    };
+                    process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                    {
+                        if (e.Data != null) lock (outputBuilder) outputBuilder.AppendLine(e.Data);
+                    };
+                    process.Start();
+                    SetCurrentProcess(process);
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    while (!process.WaitForExit(150)) if (cancelRequested) { TryKill(process); break; }
+                    try { process.WaitForExit(); } catch { }
+                    writer.Flush();
+                    return new ProcessResult { ExitCode = cancelRequested ? 130 : process.ExitCode, Output = outputBuilder.ToString(), Canceled = cancelRequested };
+                }
+            }
+            catch (Exception ex) { return new ProcessResult { ExitCode = 1, Output = ex.Message, Canceled = cancelRequested }; }
+            finally { ClearCurrentProcess(process); try { process.Dispose(); } catch { } }
+        }
+
         private void SetCurrentProcess(Process process) { lock (processLock) currentProcess = process; }
         private void ClearCurrentProcess(Process process) { lock (processLock) if (ReferenceEquals(currentProcess, process)) currentProcess = null; }
         private void ClearCurrentProcess() { lock (processLock) currentProcess = null; }
@@ -1398,6 +1523,7 @@ namespace ApkInstallTool
             deviceList.Enabled = !executing && !isLogcatRunning;
             launchAfterInstallCheckBox.Enabled = !executing && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
             clearLogcatCacheButton.Enabled = !executing && !isLogcatRunning && !isDeviceCommandRunning;
+            exportLogcatCacheButton.Enabled = !executing && !isLogcatRunning && !isDeviceCommandRunning;
             startLogRecordButton.Enabled = !executing && !isLogcatRunning;
             stopLogRecordButton.Enabled = isLogcatRunning;
             logRecordPathTextBox.Enabled = !executing && !isLogcatRunning;
