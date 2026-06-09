@@ -596,6 +596,7 @@ namespace ApkInstallTool
             cancelRequested = false;
             isDeviceCommandRunning = true;
             SetDeviceCommandUi(true);
+            SetLogcatCacheExportStatus(device, outputPath);
             SetStatus("正在导出日志缓存...");
             AddLogLine("导出日志缓存：" + outputPath);
             var thread = new Thread(new ThreadStart(delegate
@@ -607,18 +608,21 @@ namespace ApkInstallTool
                     if (result.Canceled)
                     {
                         AddLogLine("导出日志缓存已中止。");
+                        BeginInvokeIfNeeded(delegate { SetLogcatCacheExportCanceledStatus(outputPath, result.WrittenLines); });
                         SetStatus("导出日志缓存已中止。");
                     }
                     else if (result.ExitCode == 0)
                     {
                         var summary = "日志缓存已导出：" + outputPath;
                         AddLogLine(summary);
+                        BeginInvokeIfNeeded(delegate { SetLogcatCacheExportFinishedStatus(outputPath, result.WrittenLines); });
                         SetStatus(summary);
                     }
                     else
                     {
                         var error = FirstUsefulLine(result.Output) ?? "导出失败。";
                         AddLogLine("导出日志缓存失败：" + error);
+                        BeginInvokeIfNeeded(delegate { SetLogcatCacheExportFailedStatus(error); });
                         SetStatus("导出日志缓存失败");
                     }
                 }
@@ -885,6 +889,38 @@ namespace ApkInstallTool
                 "\u5f55\u5236\u5df2\u505c\u6b62\uff1a" + writtenLines +
                 " \u884c\uff0c" + FormatFileSize(fileSize) +
                 "\uff0c\u4fdd\u5b58\u5230 " + outputPath;
+        }
+
+        private void SetLogcatCacheExportStatus(DeviceInfo device, string outputPath)
+        {
+            var deviceLabel = device == null || string.IsNullOrWhiteSpace(device.Label) ? "" : device.Label;
+            if (device != null && string.IsNullOrWhiteSpace(deviceLabel)) deviceLabel = device.Serial;
+            logRecordStatusLabel.Text =
+                "\u6b63\u5728\u5bfc\u51fa\u7f13\u5b58\uff1a\u8bbe\u5907 " + deviceLabel +
+                "\uff0c\u6587\u4ef6 " + Path.GetFileName(outputPath);
+        }
+
+        private void SetLogcatCacheExportFinishedStatus(string outputPath, long writtenLines)
+        {
+            var fileSize = GetLogRecordFileSize(outputPath);
+            logRecordStatusLabel.Text =
+                "\u7f13\u5b58\u5df2\u5bfc\u51fa\uff1a" + writtenLines +
+                " \u884c\uff0c" + FormatFileSize(fileSize) +
+                "\uff0c\u4fdd\u5b58\u5230 " + outputPath;
+        }
+
+        private void SetLogcatCacheExportCanceledStatus(string outputPath, long writtenLines)
+        {
+            var fileSize = GetLogRecordFileSize(outputPath);
+            logRecordStatusLabel.Text =
+                "\u5bfc\u51fa\u5df2\u4e2d\u6b62\uff1a\u5df2\u5199\u5165 " + writtenLines +
+                " \u884c\uff0c" + FormatFileSize(fileSize) +
+                "\uff0c\u4fdd\u5b58\u5230 " + outputPath;
+        }
+
+        private void SetLogcatCacheExportFailedStatus(string error)
+        {
+            logRecordStatusLabel.Text = "\u5bfc\u51fa\u7f13\u5b58\u5931\u8d25\uff1a" + error;
         }
 
         private void ResetLogRecordStatus()
@@ -1653,6 +1689,7 @@ namespace ApkInstallTool
         {
             var outputBuilder = new StringBuilder();
             var process = CreateAdbProcess(filePath, arguments);
+            long writtenLines = 0;
             try
             {
                 using (var writer = new StreamWriter(outputPath, false, Encoding.UTF8))
@@ -1662,7 +1699,11 @@ namespace ApkInstallTool
                         if (e.Data == null) return;
                         if (ShouldWriteLogcatLine(e.Data, pidFilter))
                         {
-                            lock (writer) writer.WriteLine(FormatLogcatLine(e.Data, includeThreadInfo, includeTimeInfo));
+                            lock (writer)
+                            {
+                                writer.WriteLine(FormatLogcatLine(e.Data, includeThreadInfo, includeTimeInfo));
+                                writtenLines++;
+                            }
                         }
                     };
                     process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
@@ -1676,10 +1717,10 @@ namespace ApkInstallTool
                     while (!process.WaitForExit(150)) if (cancelRequested) { TryKill(process); break; }
                     try { process.WaitForExit(); } catch { }
                     writer.Flush();
-                    return new ProcessResult { ExitCode = cancelRequested ? 130 : process.ExitCode, Output = outputBuilder.ToString(), Canceled = cancelRequested };
+                    return new ProcessResult { ExitCode = cancelRequested ? 130 : process.ExitCode, Output = outputBuilder.ToString(), Canceled = cancelRequested, WrittenLines = writtenLines };
                 }
             }
-            catch (Exception ex) { return new ProcessResult { ExitCode = 1, Output = ex.Message, Canceled = cancelRequested }; }
+            catch (Exception ex) { return new ProcessResult { ExitCode = 1, Output = ex.Message, Canceled = cancelRequested, WrittenLines = writtenLines }; }
             finally { ClearCurrentProcess(process); try { process.Dispose(); } catch { } }
         }
 
@@ -1852,5 +1893,6 @@ namespace ApkInstallTool
         public int ExitCode;
         public string Output = "";
         public bool Canceled;
+        public long WrittenLines;
     }
 }
