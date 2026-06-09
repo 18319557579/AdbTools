@@ -55,6 +55,7 @@ namespace ApkInstallTool
         private readonly ComboBox logRecordLevelComboBox = new ComboBox();
         private readonly Button browseLogRecordFileButton = new Button();
         private readonly Button browseLogRecordFolderButton = new Button();
+        private readonly Button clearLogcatCacheButton = new Button();
         private readonly Button startLogRecordButton = new Button();
         private readonly Button stopLogRecordButton = new Button();
 
@@ -329,15 +330,18 @@ namespace ApkInstallTool
 
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
-            actionPanel.ColumnCount = 3;
+            actionPanel.ColumnCount = 4;
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.Controls.Add(actionPanel, 0, 2);
+            clearLogcatCacheButton.Text = "清除缓存";
             startLogRecordButton.Text = "开始录制";
             stopLogRecordButton.Text = "退出录制";
-            AddActionButton(actionPanel, startLogRecordButton, 0);
-            AddActionButton(actionPanel, stopLogRecordButton, 1);
+            AddActionButton(actionPanel, clearLogcatCacheButton, 0);
+            AddActionButton(actionPanel, startLogRecordButton, 1);
+            AddActionButton(actionPanel, stopLogRecordButton, 2);
             stopLogRecordButton.Enabled = false;
 
             var hint = new Label();
@@ -451,6 +455,7 @@ namespace ApkInstallTool
             deviceList.MouseUp += delegate { BeginSyncAddressFromCurrentDevice(); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
+            clearLogcatCacheButton.Click += delegate { ClearLogcatCache(); };
             startLogRecordButton.Click += delegate { StartLogRecording(); };
             stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
             DragEnter += OnDragEnter;
@@ -499,6 +504,14 @@ namespace ApkInstallTool
             if (!TryGetLogRecordTags(out tags)) return;
             var args = BuildSimpleLogRecordArgs(device.Serial, tags, GetSelectedLogRecordLevel());
             StartLogcatProcess(device, outputPath, args, false, "开始日志录制：");
+        }
+
+        private void ClearLogcatCache()
+        {
+            if (isLogcatRunning || isExecuting || isDeviceCommandRunning) return;
+            var device = GetSingleCheckedDeviceForLogRecording();
+            if (device == null) return;
+            RunDeviceCommand("清除日志缓存", new[] { "-s", device.Serial, "logcat", "-c" });
         }
 
         private void StartLogcatProcess(DeviceInfo device, string outputPath, List<string> args, bool clearBefore, string startMessage)
@@ -574,6 +587,7 @@ namespace ApkInstallTool
 
         private void SetLogcatUi(bool running)
         {
+            clearLogcatCacheButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             startLogRecordButton.Enabled = !running;
             stopLogRecordButton.Enabled = running;
             browseLogRecordFileButton.Enabled = !running;
@@ -811,6 +825,7 @@ namespace ApkInstallTool
             toggleDevicesButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             connectAddressTextBox.Enabled = !running && !isExecuting;
             cancelButton.Enabled = running || isExecuting;
+            clearLogcatCacheButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             startLogRecordButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
         }
@@ -1192,6 +1207,7 @@ namespace ApkInstallTool
             apkTextBox.Enabled = !executing;
             deviceList.Enabled = !executing && !isLogcatRunning;
             launchAfterInstallCheckBox.Enabled = !executing && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
+            clearLogcatCacheButton.Enabled = !executing && !isLogcatRunning && !isDeviceCommandRunning;
             startLogRecordButton.Enabled = !executing && !isLogcatRunning;
             stopLogRecordButton.Enabled = isLogcatRunning;
             logRecordPathTextBox.Enabled = !executing && !isLogcatRunning;
