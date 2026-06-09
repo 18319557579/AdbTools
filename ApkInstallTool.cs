@@ -60,6 +60,8 @@ namespace ApkInstallTool
         private readonly Button exportLogcatCacheButton = new Button();
         private readonly Button startLogRecordButton = new Button();
         private readonly Button stopLogRecordButton = new Button();
+        private readonly Label logRecordStatusLabel = new Label();
+        private readonly System.Windows.Forms.Timer logRecordStatusTimer = new System.Windows.Forms.Timer();
 
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
         private readonly object processLock = new object();
@@ -72,6 +74,11 @@ namespace ApkInstallTool
         private HashSet<string> logcatPidFilter;
         private bool logcatIncludeThreadInfo = true;
         private bool logcatIncludeTimeInfo = true;
+        private DateTime logRecordStartedAt;
+        private string logRecordCurrentOutputPath = "";
+        private string logRecordCurrentDeviceLabel = "";
+        private long logRecordWrittenLines;
+        private long logRecordLastFileSize;
         private readonly object logcatLock = new object();
         private volatile bool cancelRequested;
         private volatile bool isExecuting;
@@ -262,13 +269,14 @@ namespace ApkInstallTool
             logRecordTab.Padding = new Padding(10);
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Top;
-            panel.Height = 194;
+            panel.Height = 224;
             panel.ColumnCount = 1;
-            panel.RowCount = 5;
+            panel.RowCount = 6;
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             logRecordTab.Controls.Add(panel);
 
@@ -382,12 +390,19 @@ namespace ApkInstallTool
             AddActionButton(actionPanel, stopLogRecordButton, 3);
             stopLogRecordButton.Enabled = false;
 
+            logRecordStatusLabel.Text = "\u672a\u5f00\u59cb\u5f55\u5236";
+            logRecordStatusLabel.Dock = DockStyle.Fill;
+            logRecordStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            logRecordStatusLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            logRecordStatusLabel.AutoEllipsis = true;
+            panel.Controls.Add(logRecordStatusLabel, 0, 4);
+
             var hint = new Label();
             hint.Text = "文件夹会自动保存为 log-时间.txt；多个 Tag 可用空格、逗号或分号分隔。";
             hint.Dock = DockStyle.Fill;
             hint.TextAlign = ContentAlignment.MiddleLeft;
             hint.ForeColor = Color.FromArgb(80, 80, 80);
-            panel.Controls.Add(hint, 0, 4);
+            panel.Controls.Add(hint, 0, 5);
         }
 
         private void AddLabel(TableLayoutPanel panel, string text, int column)
@@ -490,6 +505,8 @@ namespace ApkInstallTool
             exportLogcatCacheButton.Click += delegate { ExportLogcatCache(); };
             startLogRecordButton.Click += delegate { StartLogRecording(); };
             stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
+            logRecordStatusTimer.Interval = 1000;
+            logRecordStatusTimer.Tick += delegate { UpdateLogRecordStatus(); };
             logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordTagTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordPackageTextBox.TextChanged += delegate { SaveConfig(); };
@@ -641,6 +658,11 @@ namespace ApkInstallTool
                     logcatPidFilter = pidFilter;
                     logcatIncludeThreadInfo = includeThreadInfo;
                     logcatIncludeTimeInfo = includeTimeInfo;
+                    logRecordStartedAt = DateTime.Now;
+                    logRecordCurrentOutputPath = outputPath;
+                    logRecordCurrentDeviceLabel = string.IsNullOrWhiteSpace(device.Label) ? device.Serial : device.Label;
+                    logRecordWrittenLines = 0;
+                    logRecordLastFileSize = 0;
                 }
                 var process = CreateAdbProcess(adb, args.ToArray());
                 process.OutputDataReceived += WriteLogcatData;
@@ -651,11 +673,21 @@ namespace ApkInstallTool
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
+                BeginInvokeIfNeeded(delegate
+                {
+                    UpdateLogRecordStatus();
+                    logRecordStatusTimer.Start();
+                });
             }
             catch (Exception ex)
             {
                 AddLogLine("启动 logcat 失败：" + ex.Message);
                 FinishLogcatRecording();
+                BeginInvokeIfNeeded(delegate
+                {
+                    logRecordStatusTimer.Stop();
+                    ResetLogRecordStatus();
+                });
             }
         }
 
@@ -669,22 +701,31 @@ namespace ApkInstallTool
 
         private void FinishLogcatRecording()
         {
+            string outputPath;
+            long writtenLines;
+            long fileSize;
             lock (logcatLock)
             {
                 if (!isLogcatRunning && logcatProcess == null && logcatWriter == null) return;
                 isLogcatRunning = false;
                 try { if (logcatWriter != null) logcatWriter.Dispose(); } catch { }
+                outputPath = logRecordCurrentOutputPath;
+                writtenLines = logRecordWrittenLines;
+                fileSize = GetLogRecordFileSize(outputPath);
                 logcatWriter = null;
                 logcatProcess = null;
                 logcatPidFilter = null;
                 logcatIncludeThreadInfo = true;
                 logcatIncludeTimeInfo = true;
+                logRecordLastFileSize = fileSize;
             }
             BeginInvokeIfNeeded(delegate
             {
+                logRecordStatusTimer.Stop();
                 SetLogcatUi(false);
-                SetStatus("日志录制已停止。");
-                AddLogLine("logcat 录制已停止。");
+                SetLogRecordFinishedStatus(outputPath, writtenLines, fileSize);
+                SetStatus("\u65e5\u5fd7\u5f55\u5236\u5df2\u505c\u6b62\u3002");
+                AddLogLine("logcat \u5f55\u5236\u5df2\u505c\u6b62\u3002");
             });
         }
 
@@ -699,6 +740,7 @@ namespace ApkInstallTool
                     {
                         logcatWriter.WriteLine(FormatLogcatLine(e.Data, logcatIncludeThreadInfo, logcatIncludeTimeInfo));
                         logcatWriter.Flush();
+                        logRecordWrittenLines++;
                     }
                 }
                 catch { }
@@ -795,6 +837,100 @@ namespace ApkInstallTool
             if (includeThreadInfo) parts.Add(match.Groups["pid"].Value + " " + match.Groups["tid"].Value);
             parts.Add(match.Groups["rest"].Value);
             return string.Join(" ", parts.ToArray());
+        }
+
+        private void UpdateLogRecordStatus()
+        {
+            string deviceLabel;
+            string outputPath;
+            DateTime startedAt;
+            long writtenLines;
+            long fileSize;
+            lock (logcatLock)
+            {
+                deviceLabel = logRecordCurrentDeviceLabel;
+                outputPath = logRecordCurrentOutputPath;
+                startedAt = logRecordStartedAt;
+                writtenLines = logRecordWrittenLines;
+                fileSize = logRecordLastFileSize;
+            }
+
+            if (string.IsNullOrWhiteSpace(outputPath) || startedAt == DateTime.MinValue)
+            {
+                logRecordStatusLabel.Text = "\u672a\u5f00\u59cb\u5f55\u5236";
+                return;
+            }
+
+            fileSize = GetLogRecordFileSize(outputPath);
+            lock (logcatLock) logRecordLastFileSize = fileSize;
+
+            var duration = DateTime.Now - startedAt;
+            var fileName = Path.GetFileName(outputPath);
+            logRecordStatusLabel.Text =
+                "\u8bbe\u5907\uff1a" + deviceLabel +
+                "    \u65f6\u957f\uff1a" + FormatDuration(duration) +
+                "    \u5927\u5c0f\uff1a" + FormatFileSize(fileSize) +
+                "    \u884c\u6570\uff1a" + writtenLines +
+                "    \u6587\u4ef6\uff1a" + fileName;
+        }
+
+        private void SetLogRecordFinishedStatus(string outputPath, long writtenLines, long fileSize)
+        {
+            if (string.IsNullOrWhiteSpace(outputPath))
+            {
+                logRecordStatusLabel.Text = "\u672a\u5f00\u59cb\u5f55\u5236";
+                return;
+            }
+            logRecordStatusLabel.Text =
+                "\u5f55\u5236\u5df2\u505c\u6b62\uff1a" + writtenLines +
+                " \u884c\uff0c" + FormatFileSize(fileSize) +
+                "\uff0c\u4fdd\u5b58\u5230 " + outputPath;
+        }
+
+        private void ResetLogRecordStatus()
+        {
+            lock (logcatLock)
+            {
+                logRecordStartedAt = DateTime.MinValue;
+                logRecordCurrentOutputPath = "";
+                logRecordCurrentDeviceLabel = "";
+                logRecordWrittenLines = 0;
+                logRecordLastFileSize = 0;
+            }
+            logRecordStatusLabel.Text = "\u672a\u5f00\u59cb\u5f55\u5236";
+        }
+
+        private long GetLogRecordFileSize(string outputPath)
+        {
+            if (string.IsNullOrWhiteSpace(outputPath)) return logRecordLastFileSize;
+            try
+            {
+                if (File.Exists(outputPath)) return new FileInfo(outputPath).Length;
+            }
+            catch { }
+            return logRecordLastFileSize;
+        }
+
+        private static string FormatDuration(TimeSpan duration)
+        {
+            if (duration < TimeSpan.Zero) duration = TimeSpan.Zero;
+            return ((int)duration.TotalHours).ToString("00") + ":" +
+                   duration.Minutes.ToString("00") + ":" +
+                   duration.Seconds.ToString("00");
+        }
+
+        private static string FormatFileSize(long bytes)
+        {
+            if (bytes < 0) bytes = 0;
+            string[] units = { "B", "KB", "MB", "GB" };
+            double value = bytes;
+            var unitIndex = 0;
+            while (value >= 1024 && unitIndex < units.Length - 1)
+            {
+                value /= 1024;
+                unitIndex++;
+            }
+            return unitIndex == 0 ? bytes + " " + units[unitIndex] : value.ToString("0.0") + " " + units[unitIndex];
         }
 
         private void SetLogcatUi(bool running)
