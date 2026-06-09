@@ -51,6 +51,7 @@ namespace ApkInstallTool
         private readonly TextBox logBox = new TextBox();
 
         private readonly TextBox logRecordPathTextBox = new TextBox();
+        private readonly TextBox logRecordTagTextBox = new TextBox();
         private readonly Button browseLogRecordFileButton = new Button();
         private readonly Button browseLogRecordFolderButton = new Button();
         private readonly Button startLogRecordButton = new Button();
@@ -254,9 +255,10 @@ namespace ApkInstallTool
             logRecordTab.Padding = new Padding(10);
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Top;
-            panel.Height = 118;
+            panel.Height = 156;
             panel.ColumnCount = 1;
-            panel.RowCount = 3;
+            panel.RowCount = 4;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -288,13 +290,29 @@ namespace ApkInstallTool
             browseLogRecordFolderButton.Margin = new Padding(0, 3, 0, 3);
             pathPanel.Controls.Add(browseLogRecordFolderButton, 3, 0);
 
+            var tagPanel = new TableLayoutPanel();
+            tagPanel.Dock = DockStyle.Fill;
+            tagPanel.ColumnCount = 2;
+            tagPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            tagPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.Controls.Add(tagPanel, 0, 1);
+
+            var tagLabel = new Label();
+            tagLabel.Text = "过滤 Tag";
+            tagLabel.Dock = DockStyle.Fill;
+            tagLabel.TextAlign = ContentAlignment.MiddleLeft;
+            tagPanel.Controls.Add(tagLabel, 0, 0);
+            logRecordTagTextBox.Dock = DockStyle.Fill;
+            logRecordTagTextBox.Margin = new Padding(0, 4, 0, 4);
+            tagPanel.Controls.Add(logRecordTagTextBox, 1, 0);
+
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
             actionPanel.ColumnCount = 3;
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(actionPanel, 0, 1);
+            panel.Controls.Add(actionPanel, 0, 2);
             startLogRecordButton.Text = "开始录制";
             stopLogRecordButton.Text = "退出录制";
             AddActionButton(actionPanel, startLogRecordButton, 0);
@@ -302,11 +320,11 @@ namespace ApkInstallTool
             stopLogRecordButton.Enabled = false;
 
             var hint = new Label();
-            hint.Text = "可输入文件或文件夹路径；文件夹会自动保存为 log-时间.txt。录制设备取自下方目标设备列表。";
+            hint.Text = "文件夹会自动保存为 log-时间.txt；多个 Tag 可用空格、逗号或分号分隔。";
             hint.Dock = DockStyle.Fill;
             hint.TextAlign = ContentAlignment.MiddleLeft;
             hint.ForeColor = Color.FromArgb(80, 80, 80);
-            panel.Controls.Add(hint, 0, 2);
+            panel.Controls.Add(hint, 0, 3);
         }
 
         private void AddLabel(TableLayoutPanel panel, string text, int column)
@@ -455,7 +473,9 @@ namespace ApkInstallTool
             if (device == null) return;
             var outputPath = PrepareLogRecordOutputPath();
             if (outputPath == null) return;
-            var args = BuildSimpleLogRecordArgs(device.Serial);
+            List<string> tags;
+            if (!TryGetLogRecordTags(out tags)) return;
+            var args = BuildSimpleLogRecordArgs(device.Serial, tags);
             StartLogcatProcess(device, outputPath, args, false, "开始日志录制：");
         }
 
@@ -537,6 +557,7 @@ namespace ApkInstallTool
             browseLogRecordFileButton.Enabled = !running;
             browseLogRecordFolderButton.Enabled = !running;
             logRecordPathTextBox.Enabled = !running;
+            logRecordTagTextBox.Enabled = !running;
             refreshButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             toggleDevicesButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             deviceList.Enabled = !running && !isExecuting;
@@ -600,9 +621,36 @@ namespace ApkInstallTool
             return string.IsNullOrEmpty(Path.GetExtension(trimmed));
         }
 
-        private List<string> BuildSimpleLogRecordArgs(string serial)
+        private List<string> BuildSimpleLogRecordArgs(string serial, List<string> tags)
         {
-            return new List<string> { "-s", serial, "logcat", "-v", "threadtime" };
+            var args = new List<string> { "-s", serial, "logcat", "-v", "threadtime" };
+            if (tags != null && tags.Count > 0)
+            {
+                foreach (var tag in tags) args.Add(tag + ":V");
+                args.Add("*:S");
+            }
+            return args;
+        }
+
+        private bool TryGetLogRecordTags(out List<string> tags)
+        {
+            tags = new List<string>();
+            var text = logRecordTagTextBox.Text;
+            if (string.IsNullOrWhiteSpace(text)) return true;
+
+            var parts = text.Split(new[] { ' ', '\t', '\r', '\n', ',', '，', ';', '；' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var tag = part.Trim();
+                if (tag.Length == 0) continue;
+                if (tag.IndexOf(':') >= 0)
+                {
+                    MessageBox.Show(this, "Tag 不需要填写等级。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
+                if (!tags.Contains(tag)) tags.Add(tag);
+            }
+            return true;
         }
 
         private DeviceInfo GetSingleCheckedDeviceForLogRecording()
