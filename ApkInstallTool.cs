@@ -179,17 +179,19 @@ namespace ApkInstallTool
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
             actionPanel.ColumnCount = 3;
-            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
-            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             panel.Controls.Add(actionPanel, 0, 3);
             installButton.Text = "开始执行";
-            installButton.Dock = DockStyle.Fill;
-            installButton.Margin = new Padding(0, 3, 8, 3);
+            installButton.Dock = DockStyle.None;
+            installButton.Size = new Size(88, 28);
+            installButton.Margin = new Padding(0, 4, 8, 0);
             actionPanel.Controls.Add(installButton, 0, 0);
             cancelButton.Text = "中止执行";
-            cancelButton.Dock = DockStyle.Fill;
-            cancelButton.Margin = new Padding(0, 3, 8, 3);
+            cancelButton.Dock = DockStyle.None;
+            cancelButton.Size = new Size(88, 28);
+            cancelButton.Margin = new Padding(0, 4, 8, 0);
             cancelButton.Enabled = false;
             actionPanel.Controls.Add(cancelButton, 1, 0);
         }
