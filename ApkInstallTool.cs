@@ -302,7 +302,7 @@ namespace ApkInstallTool
             stopLogRecordButton.Enabled = false;
 
             var hint = new Label();
-            hint.Text = "可输入文件或文件夹路径；文件夹会自动保存为 log.txt。录制设备取自下方目标设备列表。";
+            hint.Text = "可输入文件或文件夹路径；文件夹会自动保存为 log-时间.txt。录制设备取自下方目标设备列表。";
             hint.Dock = DockStyle.Fill;
             hint.TextAlign = ContentAlignment.MiddleLeft;
             hint.ForeColor = Color.FromArgb(80, 80, 80);
@@ -574,8 +574,13 @@ namespace ApkInstallTool
         {
             var resolved = ResolveOutputPath(path);
             if (string.IsNullOrWhiteSpace(resolved)) return null;
-            if (Directory.Exists(resolved) || IsDirectoryLikePath(resolved)) return Path.Combine(resolved, "log.txt");
+            if (Directory.Exists(resolved) || IsDirectoryLikePath(resolved)) return Path.Combine(resolved, GenerateLogRecordFileName());
             return resolved;
+        }
+
+        private static string GenerateLogRecordFileName()
+        {
+            return "log-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".txt";
         }
 
         private string GetInitialDirectoryFromPath(string path)
