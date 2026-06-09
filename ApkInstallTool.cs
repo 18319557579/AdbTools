@@ -31,7 +31,6 @@ namespace ApkInstallTool
         private readonly TextBox apkTextBox = new TextBox();
         private readonly Button browseButton = new Button();
         private readonly Button refreshButton = new Button();
-        private readonly Button toggleDevicesButton = new Button();
         private readonly TextBox connectAddressTextBox = new TextBox();
         private readonly Button connectButton = new Button();
         private readonly Button disconnectButton = new Button();
@@ -418,10 +417,9 @@ namespace ApkInstallTool
             root.Controls.Add(devicePanel, 0, 1);
             var deviceHeader = new TableLayoutPanel();
             deviceHeader.Dock = DockStyle.Fill;
-            deviceHeader.ColumnCount = 3;
+            deviceHeader.ColumnCount = 2;
             deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
             devicePanel.Controls.Add(deviceHeader, 0, 0);
             var deviceLabel = new Label();
             deviceLabel.Text = "目标设备列表";
@@ -432,10 +430,6 @@ namespace ApkInstallTool
             refreshButton.Dock = DockStyle.Fill;
             refreshButton.Margin = new Padding(4, 2, 4, 2);
             deviceHeader.Controls.Add(refreshButton, 1, 0);
-            toggleDevicesButton.Text = "全选/反选";
-            toggleDevicesButton.Dock = DockStyle.Fill;
-            toggleDevicesButton.Margin = new Padding(4, 2, 0, 2);
-            deviceHeader.Controls.Add(toggleDevicesButton, 2, 0);
             deviceList.Dock = DockStyle.Fill;
             deviceList.CheckOnClick = true;
             devicePanel.Controls.Add(deviceList, 0, 1);
@@ -475,7 +469,6 @@ namespace ApkInstallTool
         {
             browseButton.Click += delegate { BrowseApk(); };
             refreshButton.Click += delegate { RefreshDevices(); };
-            toggleDevicesButton.Click += delegate { ToggleDevices(); };
             connectButton.Click += delegate { ConnectDevice(); };
             disconnectButton.Click += delegate { DisconnectDevice(); };
             clearLogButton.Click += delegate { logBox.Clear(); };
@@ -819,7 +812,6 @@ namespace ApkInstallTool
             logRecordThreadInfoCheckBox.Enabled = !running;
             logRecordTimeInfoCheckBox.Enabled = !running;
             refreshButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            toggleDevicesButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             deviceList.Enabled = !running && !isExecuting;
         }
 
@@ -1073,7 +1065,6 @@ namespace ApkInstallTool
             connectButton.Enabled = !running && !isExecuting;
             disconnectButton.Enabled = !running && !isExecuting;
             refreshButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            toggleDevicesButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             connectAddressTextBox.Enabled = !running && !isExecuting;
             cancelButton.Enabled = running || isExecuting;
             clearLogcatCacheButton.Enabled = !running && !isExecuting && !isLogcatRunning;
@@ -1305,14 +1296,6 @@ namespace ApkInstallTool
         {
             var match = Regex.Match(detail, @"(?:^|\s)" + Regex.Escape(key) + @":(?<value>\S+)");
             return match.Success ? match.Groups["value"].Value : "";
-        }
-
-        private void ToggleDevices()
-        {
-            var allChecked = deviceList.Items.Count > 0;
-            for (var i = 0; i < deviceList.Items.Count; i++) if (!deviceList.GetItemChecked(i)) { allChecked = false; break; }
-            for (var i = 0; i < deviceList.Items.Count; i++) deviceList.SetItemChecked(i, !allChecked);
-            BeginSyncAddressFromCurrentDevice();
         }
 
         private void UpdateExecutionOptionState()
@@ -1574,7 +1557,6 @@ namespace ApkInstallTool
         {
             browseButton.Enabled = !executing;
             refreshButton.Enabled = !executing && !isDeviceCommandRunning && !isLogcatRunning;
-            toggleDevicesButton.Enabled = !executing && !isDeviceCommandRunning && !isLogcatRunning;
             connectButton.Enabled = !executing && !isDeviceCommandRunning;
             disconnectButton.Enabled = !executing && !isDeviceCommandRunning;
             connectAddressTextBox.Enabled = !executing && !isDeviceCommandRunning;
