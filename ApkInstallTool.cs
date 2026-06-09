@@ -72,6 +72,8 @@ namespace ApkInstallTool
         private volatile bool isExecuting;
         private volatile bool isDeviceCommandRunning;
         private volatile bool isLogcatRunning;
+        private bool loadingConfig;
+        private bool configReady;
         private ApkInfo currentApkInfo;
 
         public MainForm()
@@ -88,8 +90,9 @@ namespace ApkInstallTool
             BuildUi();
             WireEvents();
             Directory.CreateDirectory(logDir);
-            LoadLastApkPath();
             InitLogcatDefaults();
+            LoadConfig();
+            configReady = true;
             UpdateExecutionOptionState();
             RefreshDevices();
         }
@@ -443,7 +446,7 @@ namespace ApkInstallTool
             clearLogButton.Click += delegate { logBox.Clear(); };
             installButton.Click += delegate { StartExecution(); };
             cancelButton.Click += delegate { RequestCancel(); };
-            apkTextBox.TextChanged += delegate { UpdateApkInfo(apkTextBox.Text); };
+            apkTextBox.TextChanged += delegate { UpdateApkInfo(apkTextBox.Text); SaveConfig(); };
             installModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             cleanInstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             uninstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
@@ -458,6 +461,9 @@ namespace ApkInstallTool
             clearLogcatCacheButton.Click += delegate { ClearLogcatCache(); };
             startLogRecordButton.Click += delegate { StartLogRecording(); };
             stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
+            logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
+            logRecordTagTextBox.TextChanged += delegate { SaveConfig(); };
+            logRecordLevelComboBox.SelectedIndexChanged += delegate { SaveConfig(); };
             DragEnter += OnDragEnter;
             DragDrop += OnDragDrop;
             FormClosing += OnFormClosing;
@@ -502,6 +508,7 @@ namespace ApkInstallTool
             if (outputPath == null) return;
             List<string> tags;
             if (!TryGetLogRecordTags(out tags)) return;
+            SaveConfig();
             var args = BuildSimpleLogRecordArgs(device.Serial, tags, GetSelectedLogRecordLevel());
             StartLogcatProcess(device, outputPath, args, false, "开始日志录制：");
         }
@@ -682,6 +689,22 @@ namespace ApkInstallTool
             return match.Success ? match.Groups[1].Value : "V";
         }
 
+        private void SetSelectedLogRecordLevel(string level)
+        {
+            if (string.IsNullOrWhiteSpace(level)) return;
+            level = level.Trim().ToUpperInvariant();
+            if (!Regex.IsMatch(level, "^[VDIWEF]$")) return;
+            for (var i = 0; i < logRecordLevelComboBox.Items.Count; i++)
+            {
+                var item = logRecordLevelComboBox.Items[i] as string;
+                if (item != null && Regex.IsMatch(item, @"\(" + Regex.Escape(level) + @"\)"))
+                {
+                    logRecordLevelComboBox.SelectedIndex = i;
+                    return;
+                }
+            }
+        }
+
         private bool TryGetLogRecordTags(out List<string> tags)
         {
             tags = new List<string>();
@@ -859,33 +882,73 @@ namespace ApkInstallTool
             return files.FirstOrDefault(f => File.Exists(f) && string.Equals(Path.GetExtension(f), ".apk", StringComparison.OrdinalIgnoreCase));
         }
 
-        private void SetApkPath(string path) { apkTextBox.Text = path; SaveLastApkPath(path); }
+        private void SetApkPath(string path) { apkTextBox.Text = path; SaveConfig(path); }
 
-        private void LoadLastApkPath()
+        private void LoadConfig()
         {
             try
             {
                 if (!File.Exists(configPath)) return;
                 var json = File.ReadAllText(configPath, Encoding.UTF8);
-                var match = Regex.Match(json, "\"lastApkPath\"\\s*:\\s*\"(?<path>(?:\\\\.|[^\"])*)\"");
-                if (match.Success)
-                {
-                    var path = Regex.Unescape(match.Groups["path"].Value);
-                    if (File.Exists(path)) apkTextBox.Text = path;
-                }
+                loadingConfig = true;
+
+                var lastApkPath = ReadJsonString(json, "lastApkPath");
+                if (!string.IsNullOrEmpty(lastApkPath) && File.Exists(lastApkPath)) apkTextBox.Text = lastApkPath;
+
+                var logRecordOutputPath = ReadJsonString(json, "logRecordOutputPath");
+                if (!string.IsNullOrWhiteSpace(logRecordOutputPath)) logRecordPathTextBox.Text = logRecordOutputPath;
+
+                var logRecordFilterTags = ReadJsonString(json, "logRecordFilterTags");
+                if (logRecordFilterTags != null) logRecordTagTextBox.Text = logRecordFilterTags;
+
+                var logRecordLevel = ReadJsonString(json, "logRecordLevel");
+                if (!string.IsNullOrWhiteSpace(logRecordLevel)) SetSelectedLogRecordLevel(logRecordLevel);
             }
-            catch { AddLogLine("读取配置失败，已忽略。"); }
+            catch { AddLogLine("Read config failed, ignored."); }
+            finally { loadingConfig = false; }
         }
 
         private void SaveLastApkPath(string path)
         {
+            SaveConfig(path);
+        }
+
+        private void SaveConfig(string lastApkPathOverride = null)
+        {
             try
             {
-                var escaped = path.Replace("\\", "\\\\").Replace("\"", "\\\"");
-                var json = "{\r\n    \"lastApkPath\":  \"" + escaped + "\",\r\n    \"updatedAt\":  \"" + DateTime.Now.ToString("s") + "\"\r\n}\r\n";
+                if (!configReady || loadingConfig) return;
+                var lastApkPath = lastApkPathOverride ?? apkTextBox.Text;
+                var json =
+                    "{\r\n" +
+                    "    \"lastApkPath\":  \"" + EscapeJsonString(lastApkPath) + "\",\r\n" +
+                    "    \"logRecordOutputPath\":  \"" + EscapeJsonString(logRecordPathTextBox.Text) + "\",\r\n" +
+                    "    \"logRecordFilterTags\":  \"" + EscapeJsonString(logRecordTagTextBox.Text) + "\",\r\n" +
+                    "    \"logRecordLevel\":  \"" + EscapeJsonString(GetSelectedLogRecordLevel()) + "\",\r\n" +
+                    "    \"updatedAt\":  \"" + DateTime.Now.ToString("s") + "\"\r\n" +
+                    "}\r\n";
                 File.WriteAllText(configPath, json, Encoding.UTF8);
             }
-            catch (Exception ex) { AddLogLine("保存配置失败：" + ex.Message); }
+            catch (Exception ex) { AddLogLine("Save config failed: " + ex.Message); }
+        }
+
+        private static string ReadJsonString(string json, string name)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name)) return null;
+            var pattern = "\"" + Regex.Escape(name) + "\"\\s*:\\s*\"(?<value>(?:\\\\.|[^\"])*)\"";
+            var match = Regex.Match(json, pattern);
+            return match.Success ? Regex.Unescape(match.Groups["value"].Value) : null;
+        }
+
+        private static string EscapeJsonString(string value)
+        {
+            if (value == null) return "";
+            return value
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n")
+                .Replace("\t", "\\t");
         }
 
         private void UpdateApkInfo(string apkPath)
