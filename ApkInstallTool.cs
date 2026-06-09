@@ -33,7 +33,6 @@ namespace ApkInstallTool
         private readonly Button refreshButton = new Button();
         private readonly Button toggleDevicesButton = new Button();
         private readonly TextBox connectAddressTextBox = new TextBox();
-        private readonly Button clearAddressButton = new Button();
         private readonly Button connectButton = new Button();
         private readonly Button disconnectButton = new Button();
         private readonly CheckedListBox deviceList = new CheckedListBox();
@@ -222,10 +221,9 @@ namespace ApkInstallTool
             panel.Controls.Add(title, 0, 0);
             var connectPanel = new TableLayoutPanel();
             connectPanel.Dock = DockStyle.Fill;
-            connectPanel.ColumnCount = 5;
+            connectPanel.ColumnCount = 4;
             connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
             connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
             connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
             connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
             panel.Controls.Add(connectPanel, 0, 1);
@@ -237,18 +235,14 @@ namespace ApkInstallTool
             connectAddressTextBox.Dock = DockStyle.Fill;
             connectAddressTextBox.Margin = new Padding(0, 4, 8, 4);
             connectPanel.Controls.Add(connectAddressTextBox, 1, 0);
-            clearAddressButton.Text = "清空地址";
-            clearAddressButton.Dock = DockStyle.Fill;
-            clearAddressButton.Margin = new Padding(0, 3, 8, 3);
-            connectPanel.Controls.Add(clearAddressButton, 2, 0);
             connectButton.Text = "连接设备";
             connectButton.Dock = DockStyle.Fill;
             connectButton.Margin = new Padding(0, 3, 8, 3);
-            connectPanel.Controls.Add(connectButton, 3, 0);
+            connectPanel.Controls.Add(connectButton, 2, 0);
             disconnectButton.Text = "断连设备";
             disconnectButton.Dock = DockStyle.Fill;
             disconnectButton.Margin = new Padding(0, 3, 0, 3);
-            connectPanel.Controls.Add(disconnectButton, 4, 0);
+            connectPanel.Controls.Add(disconnectButton, 3, 0);
             var hint = new Label();
             hint.Text = "单击下方目标设备列表会同步设备 ID；无线连接可输入 IP:端口，例如 192.168.1.100:5555。";
             hint.Dock = DockStyle.Fill;
@@ -459,7 +453,6 @@ namespace ApkInstallTool
             browseButton.Click += delegate { BrowseApk(); };
             refreshButton.Click += delegate { RefreshDevices(); };
             toggleDevicesButton.Click += delegate { ToggleDevices(); };
-            clearAddressButton.Click += delegate { connectAddressTextBox.Clear(); };
             connectButton.Click += delegate { ConnectDevice(); };
             disconnectButton.Click += delegate { DisconnectDevice(); };
             clearLogButton.Click += delegate { logBox.Clear(); };
@@ -949,7 +942,6 @@ namespace ApkInstallTool
         {
             connectButton.Enabled = !running && !isExecuting;
             disconnectButton.Enabled = !running && !isExecuting;
-            clearAddressButton.Enabled = !running && !isExecuting;
             refreshButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             toggleDevicesButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             connectAddressTextBox.Enabled = !running && !isExecuting;
@@ -1394,7 +1386,6 @@ namespace ApkInstallTool
             toggleDevicesButton.Enabled = !executing && !isDeviceCommandRunning && !isLogcatRunning;
             connectButton.Enabled = !executing && !isDeviceCommandRunning;
             disconnectButton.Enabled = !executing && !isDeviceCommandRunning;
-            clearAddressButton.Enabled = !executing && !isDeviceCommandRunning;
             connectAddressTextBox.Enabled = !executing && !isDeviceCommandRunning;
             installButton.Enabled = !executing;
             clearLogButton.Enabled = !executing;
