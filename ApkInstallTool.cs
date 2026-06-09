@@ -52,6 +52,7 @@ namespace ApkInstallTool
 
         private readonly TextBox logRecordPathTextBox = new TextBox();
         private readonly TextBox logRecordTagTextBox = new TextBox();
+        private readonly TextBox logRecordPackageTextBox = new TextBox();
         private readonly ComboBox logRecordLevelComboBox = new ComboBox();
         private readonly Button browseLogRecordFileButton = new Button();
         private readonly Button browseLogRecordFolderButton = new Button();
@@ -67,6 +68,7 @@ namespace ApkInstallTool
         private Process currentProcess;
         private Process logcatProcess;
         private StreamWriter logcatWriter;
+        private HashSet<string> logcatPidFilter;
         private readonly object logcatLock = new object();
         private volatile bool cancelRequested;
         private volatile bool isExecuting;
@@ -260,9 +262,10 @@ namespace ApkInstallTool
             logRecordTab.Padding = new Padding(10);
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Top;
-            panel.Height = 156;
+            panel.Height = 194;
             panel.ColumnCount = 1;
-            panel.RowCount = 4;
+            panel.RowCount = 5;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
@@ -331,6 +334,22 @@ namespace ApkInstallTool
             });
             tagPanel.Controls.Add(logRecordLevelComboBox, 3, 0);
 
+            var packagePanel = new TableLayoutPanel();
+            packagePanel.Dock = DockStyle.Fill;
+            packagePanel.ColumnCount = 2;
+            packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.Controls.Add(packagePanel, 0, 2);
+
+            var packageLabel = new Label();
+            packageLabel.Text = "包名";
+            packageLabel.Dock = DockStyle.Fill;
+            packageLabel.TextAlign = ContentAlignment.MiddleLeft;
+            packagePanel.Controls.Add(packageLabel, 0, 0);
+            logRecordPackageTextBox.Dock = DockStyle.Fill;
+            logRecordPackageTextBox.Margin = new Padding(0, 4, 0, 4);
+            packagePanel.Controls.Add(logRecordPackageTextBox, 1, 0);
+
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
             actionPanel.ColumnCount = 4;
@@ -338,7 +357,7 @@ namespace ApkInstallTool
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(actionPanel, 0, 2);
+            panel.Controls.Add(actionPanel, 0, 3);
             clearLogcatCacheButton.Text = "清除缓存";
             startLogRecordButton.Text = "开始录制";
             stopLogRecordButton.Text = "退出录制";
@@ -352,7 +371,7 @@ namespace ApkInstallTool
             hint.Dock = DockStyle.Fill;
             hint.TextAlign = ContentAlignment.MiddleLeft;
             hint.ForeColor = Color.FromArgb(80, 80, 80);
-            panel.Controls.Add(hint, 0, 3);
+            panel.Controls.Add(hint, 0, 4);
         }
 
         private void AddLabel(TableLayoutPanel panel, string text, int column)
@@ -463,6 +482,7 @@ namespace ApkInstallTool
             stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
             logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordTagTextBox.TextChanged += delegate { SaveConfig(); };
+            logRecordPackageTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordLevelComboBox.SelectedIndexChanged += delegate { SaveConfig(); };
             DragEnter += OnDragEnter;
             DragDrop += OnDragDrop;
@@ -510,7 +530,7 @@ namespace ApkInstallTool
             if (!TryGetLogRecordTags(out tags)) return;
             SaveConfig();
             var args = BuildSimpleLogRecordArgs(device.Serial, tags, GetSelectedLogRecordLevel());
-            StartLogcatProcess(device, outputPath, args, false, "开始日志录制：");
+            StartLogcatProcess(device, outputPath, args, false, "开始日志录制：", GetLogRecordPackageName());
         }
 
         private void ClearLogcatCache()
@@ -521,7 +541,7 @@ namespace ApkInstallTool
             RunDeviceCommand("清除日志缓存", new[] { "-s", device.Serial, "logcat", "-c" });
         }
 
-        private void StartLogcatProcess(DeviceInfo device, string outputPath, List<string> args, bool clearBefore, string startMessage)
+        private void StartLogcatProcess(DeviceInfo device, string outputPath, List<string> args, bool clearBefore, string startMessage, string packageName)
         {
             var adb = FindAdb();
             if (adb == null)
@@ -533,6 +553,7 @@ namespace ApkInstallTool
             {
                 InvokeProcess(adb, new[] { "-s", device.Serial, "logcat", "-c" }, false);
             }
+            var pidFilter = ResolveLogRecordPidFilter(adb, device.Serial, packageName);
             isLogcatRunning = true;
             SetLogcatUi(true);
             SetStatus("正在录制日志...");
@@ -540,6 +561,7 @@ namespace ApkInstallTool
             try
             {
                 logcatWriter = new StreamWriter(outputPath, false, Encoding.UTF8);
+                lock (logcatLock) logcatPidFilter = pidFilter;
                 var process = CreateAdbProcess(adb, args.ToArray());
                 process.OutputDataReceived += WriteLogcatData;
                 process.ErrorDataReceived += WriteLogcatData;
@@ -574,6 +596,7 @@ namespace ApkInstallTool
                 try { if (logcatWriter != null) logcatWriter.Dispose(); } catch { }
                 logcatWriter = null;
                 logcatProcess = null;
+                logcatPidFilter = null;
             }
             BeginInvokeIfNeeded(delegate
             {
@@ -588,8 +611,90 @@ namespace ApkInstallTool
             if (e.Data == null) return;
             lock (logcatLock)
             {
-                try { if (logcatWriter != null) { logcatWriter.WriteLine(e.Data); logcatWriter.Flush(); } } catch { }
+                try
+                {
+                    if (logcatWriter != null && ShouldWriteLogcatLine(e.Data))
+                    {
+                        logcatWriter.WriteLine(e.Data);
+                        logcatWriter.Flush();
+                    }
+                }
+                catch { }
             }
+        }
+
+        private string GetLogRecordPackageName()
+        {
+            return string.IsNullOrWhiteSpace(logRecordPackageTextBox.Text) ? "" : logRecordPackageTextBox.Text.Trim();
+        }
+
+        private HashSet<string> ResolveLogRecordPidFilter(string adb, string serial, string packageName)
+        {
+            if (string.IsNullOrWhiteSpace(packageName)) return null;
+            packageName = packageName.Trim();
+
+            var result = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "ps", "-A" });
+            if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output))
+            {
+                result = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "ps" });
+            }
+            if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output))
+            {
+                AddLogLine("获取包名进程失败，按当前条件继续录制。");
+                return null;
+            }
+
+            var pids = ParsePidsForPackage(result.Output, packageName);
+            if (pids.Count == 0)
+            {
+                AddLogLine("未找到包名进程，按当前条件继续录制：" + packageName);
+                return null;
+            }
+            AddLogLine("限定包名录制：" + packageName + "，pid=" + string.Join(",", pids.ToArray()));
+            return pids;
+        }
+
+        private static HashSet<string> ParsePidsForPackage(string psOutput, string packageName)
+        {
+            var pids = new HashSet<string>();
+            if (string.IsNullOrWhiteSpace(psOutput) || string.IsNullOrWhiteSpace(packageName)) return pids;
+
+            var lines = psOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var pidIndex = 1;
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length == 0) continue;
+                var parts = Regex.Split(trimmed, @"\s+");
+                if (parts.Length < 2) continue;
+                if (string.Equals(parts[0], "USER", StringComparison.OrdinalIgnoreCase))
+                {
+                    for (var i = 0; i < parts.Length; i++)
+                    {
+                        if (string.Equals(parts[i], "PID", StringComparison.OrdinalIgnoreCase))
+                        {
+                            pidIndex = i;
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                if (pidIndex >= parts.Length || !Regex.IsMatch(parts[pidIndex], @"^\d+$")) continue;
+                var processName = parts[parts.Length - 1];
+                if (string.Equals(processName, packageName, StringComparison.Ordinal) ||
+                    processName.StartsWith(packageName + ":", StringComparison.Ordinal))
+                {
+                    pids.Add(parts[pidIndex]);
+                }
+            }
+            return pids;
+        }
+
+        private bool ShouldWriteLogcatLine(string line)
+        {
+            if (logcatPidFilter == null || logcatPidFilter.Count == 0) return true;
+            var match = Regex.Match(line, @"^\S+\s+\S+\s+(?<pid>\d+)\s+");
+            return match.Success && logcatPidFilter.Contains(match.Groups["pid"].Value);
         }
 
         private void SetLogcatUi(bool running)
@@ -601,6 +706,7 @@ namespace ApkInstallTool
             browseLogRecordFolderButton.Enabled = !running;
             logRecordPathTextBox.Enabled = !running;
             logRecordTagTextBox.Enabled = !running;
+            logRecordPackageTextBox.Enabled = !running;
             logRecordLevelComboBox.Enabled = !running;
             refreshButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             toggleDevicesButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
@@ -901,6 +1007,9 @@ namespace ApkInstallTool
                 var logRecordFilterTags = ReadJsonString(json, "logRecordFilterTags");
                 if (logRecordFilterTags != null) logRecordTagTextBox.Text = logRecordFilterTags;
 
+                var logRecordPackageName = ReadJsonString(json, "logRecordPackageName");
+                if (logRecordPackageName != null) logRecordPackageTextBox.Text = logRecordPackageName;
+
                 var logRecordLevel = ReadJsonString(json, "logRecordLevel");
                 if (!string.IsNullOrWhiteSpace(logRecordLevel)) SetSelectedLogRecordLevel(logRecordLevel);
             }
@@ -924,6 +1033,7 @@ namespace ApkInstallTool
                     "    \"lastApkPath\":  \"" + EscapeJsonString(lastApkPath) + "\",\r\n" +
                     "    \"logRecordOutputPath\":  \"" + EscapeJsonString(logRecordPathTextBox.Text) + "\",\r\n" +
                     "    \"logRecordFilterTags\":  \"" + EscapeJsonString(logRecordTagTextBox.Text) + "\",\r\n" +
+                    "    \"logRecordPackageName\":  \"" + EscapeJsonString(logRecordPackageTextBox.Text) + "\",\r\n" +
                     "    \"logRecordLevel\":  \"" + EscapeJsonString(GetSelectedLogRecordLevel()) + "\",\r\n" +
                     "    \"updatedAt\":  \"" + DateTime.Now.ToString("s") + "\"\r\n" +
                     "}\r\n";
@@ -1245,6 +1355,32 @@ namespace ApkInstallTool
             finally { if (cancellable) ClearCurrentProcess(process); try { process.Dispose(); } catch { } }
         }
 
+        private ProcessResult InvokeProcessSilent(string filePath, string[] arguments)
+        {
+            var outputBuilder = new StringBuilder();
+            var startInfo = new ProcessStartInfo();
+            startInfo.FileName = filePath;
+            startInfo.UseShellExecute = false;
+            startInfo.CreateNoWindow = true;
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+            foreach (var arg in arguments) startInfo.Arguments += (startInfo.Arguments.Length == 0 ? "" : " ") + QuoteArgument(arg);
+            var process = new Process();
+            process.StartInfo = startInfo;
+            process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (e.Data != null) lock (outputBuilder) outputBuilder.AppendLine(e.Data); };
+            process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (e.Data != null) lock (outputBuilder) outputBuilder.AppendLine(e.Data); };
+            try
+            {
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+                return new ProcessResult { ExitCode = process.ExitCode, Output = outputBuilder.ToString(), Canceled = false };
+            }
+            catch (Exception ex) { return new ProcessResult { ExitCode = 1, Output = ex.Message, Canceled = false }; }
+            finally { try { process.Dispose(); } catch { } }
+        }
+
         private void SetCurrentProcess(Process process) { lock (processLock) currentProcess = process; }
         private void ClearCurrentProcess(Process process) { lock (processLock) if (ReferenceEquals(currentProcess, process)) currentProcess = null; }
         private void ClearCurrentProcess() { lock (processLock) currentProcess = null; }
@@ -1275,6 +1411,7 @@ namespace ApkInstallTool
             stopLogRecordButton.Enabled = isLogcatRunning;
             logRecordPathTextBox.Enabled = !executing && !isLogcatRunning;
             logRecordTagTextBox.Enabled = !executing && !isLogcatRunning;
+            logRecordPackageTextBox.Enabled = !executing && !isLogcatRunning;
             logRecordLevelComboBox.Enabled = !executing && !isLogcatRunning;
             browseLogRecordFileButton.Enabled = !executing && !isLogcatRunning;
             browseLogRecordFolderButton.Enabled = !executing && !isLogcatRunning;
