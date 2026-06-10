@@ -24,6 +24,12 @@ namespace ApkInstallTool
 
     internal sealed class MainForm : Form
     {
+        private enum TransferDirection
+        {
+            ToDevice,
+            ToComputer
+        }
+
         private readonly TabControl tabControl = new TabControl();
         private readonly TabPage installTab = new TabPage("APK 安装");
         private readonly TabPage connectionTab = new TabPage("设备连接");
@@ -64,9 +70,14 @@ namespace ApkInstallTool
         private readonly Label logRecordStatusLabel = new Label();
         private readonly System.Windows.Forms.Timer logRecordStatusTimer = new System.Windows.Forms.Timer();
 
+        private readonly RadioButton transferToDeviceRadioButton = new RadioButton();
+        private readonly RadioButton transferToComputerRadioButton = new RadioButton();
+        private readonly Label transferSourceLabel = new Label();
+        private readonly Label transferTargetLabel = new Label();
         private readonly TextBox transferPathTextBox = new TextBox();
         private readonly TextBox transferTargetDirTextBox = new TextBox();
         private readonly Button browseTransferButton = new Button();
+        private readonly Button browseTransferTargetButton = new Button();
         private readonly Button sendTransferButton = new Button();
         private readonly Label transferStatusLabel = new Label();
         private readonly ContextMenuStrip transferBrowseMenu = new ContextMenuStrip();
@@ -96,6 +107,11 @@ namespace ApkInstallTool
         private volatile bool isLogcatRunning;
         private bool loadingConfig;
         private bool configReady;
+        private bool updatingTransferFields;
+        private string lastPushSourcePath = "";
+        private string lastPushTargetDir = "/sdcard/Download";
+        private string lastPullSourcePath = "/sdcard/Download";
+        private string lastPullTargetDir = "";
         private ApkInfo currentApkInfo;
 
         public MainForm()
@@ -424,14 +440,30 @@ namespace ApkInstallTool
             fileTransferTab.Padding = new Padding(10);
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Top;
-            panel.Height = 176;
+            panel.Height = 214;
             panel.ColumnCount = 1;
-            panel.RowCount = 4;
+            panel.RowCount = 5;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             fileTransferTab.Controls.Add(panel);
+
+            var directionPanel = new FlowLayoutPanel();
+            directionPanel.Dock = DockStyle.Fill;
+            directionPanel.FlowDirection = FlowDirection.LeftToRight;
+            directionPanel.WrapContents = false;
+            panel.Controls.Add(directionPanel, 0, 0);
+            transferToDeviceRadioButton.Text = "电脑 -> 手机";
+            transferToDeviceRadioButton.Checked = true;
+            transferToDeviceRadioButton.AutoSize = true;
+            transferToDeviceRadioButton.Margin = new Padding(0, 10, 24, 0);
+            directionPanel.Controls.Add(transferToDeviceRadioButton);
+            transferToComputerRadioButton.Text = "手机 -> 电脑";
+            transferToComputerRadioButton.AutoSize = true;
+            transferToComputerRadioButton.Margin = new Padding(0, 10, 24, 0);
+            directionPanel.Controls.Add(transferToComputerRadioButton);
 
             var pathPanel = new TableLayoutPanel();
             pathPanel.Dock = DockStyle.Fill;
@@ -439,13 +471,12 @@ namespace ApkInstallTool
             pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
             pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            panel.Controls.Add(pathPanel, 0, 0);
+            panel.Controls.Add(pathPanel, 0, 1);
 
-            var pathLabel = new Label();
-            pathLabel.Text = "本地路径";
-            pathLabel.Dock = DockStyle.Fill;
-            pathLabel.TextAlign = ContentAlignment.MiddleLeft;
-            pathPanel.Controls.Add(pathLabel, 0, 0);
+            transferSourceLabel.Text = "本地路径";
+            transferSourceLabel.Dock = DockStyle.Fill;
+            transferSourceLabel.TextAlign = ContentAlignment.MiddleLeft;
+            pathPanel.Controls.Add(transferSourceLabel, 0, 0);
             transferPathTextBox.Dock = DockStyle.Fill;
             transferPathTextBox.Margin = new Padding(0, 4, 8, 4);
             pathPanel.Controls.Add(transferPathTextBox, 1, 0);
@@ -456,26 +487,30 @@ namespace ApkInstallTool
 
             var targetPanel = new TableLayoutPanel();
             targetPanel.Dock = DockStyle.Fill;
-            targetPanel.ColumnCount = 2;
+            targetPanel.ColumnCount = 3;
             targetPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
             targetPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(targetPanel, 0, 1);
+            targetPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            panel.Controls.Add(targetPanel, 0, 2);
 
-            var targetLabel = new Label();
-            targetLabel.Text = "设备目录";
-            targetLabel.Dock = DockStyle.Fill;
-            targetLabel.TextAlign = ContentAlignment.MiddleLeft;
-            targetPanel.Controls.Add(targetLabel, 0, 0);
+            transferTargetLabel.Text = "设备目录";
+            transferTargetLabel.Dock = DockStyle.Fill;
+            transferTargetLabel.TextAlign = ContentAlignment.MiddleLeft;
+            targetPanel.Controls.Add(transferTargetLabel, 0, 0);
             transferTargetDirTextBox.Dock = DockStyle.Fill;
-            transferTargetDirTextBox.Margin = new Padding(0, 4, 0, 4);
+            transferTargetDirTextBox.Margin = new Padding(0, 4, 8, 4);
             targetPanel.Controls.Add(transferTargetDirTextBox, 1, 0);
+            browseTransferTargetButton.Text = "选择...";
+            browseTransferTargetButton.Dock = DockStyle.Fill;
+            browseTransferTargetButton.Margin = new Padding(0, 3, 0, 3);
+            targetPanel.Controls.Add(browseTransferTargetButton, 2, 0);
 
             var actionPanel = new TableLayoutPanel();
             actionPanel.Dock = DockStyle.Fill;
             actionPanel.ColumnCount = 2;
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(actionPanel, 0, 2);
+            panel.Controls.Add(actionPanel, 0, 3);
             sendTransferButton.Text = "发送";
             sendTransferButton.Dock = DockStyle.None;
             sendTransferButton.Size = new Size(88, 28);
@@ -487,7 +522,7 @@ namespace ApkInstallTool
             transferStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             transferStatusLabel.ForeColor = Color.FromArgb(60, 60, 60);
             transferStatusLabel.AutoEllipsis = true;
-            panel.Controls.Add(transferStatusLabel, 0, 3);
+            panel.Controls.Add(transferStatusLabel, 0, 4);
 
             transferBrowseMenu.Items.AddRange(new ToolStripItem[] { browseTransferFileMenuItem, browseTransferFolderMenuItem });
         }
@@ -592,7 +627,10 @@ namespace ApkInstallTool
             exportLogcatCacheButton.Click += delegate { ExportLogcatCache(); };
             startLogRecordButton.Click += delegate { StartLogRecording(); };
             stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
+            transferToDeviceRadioButton.CheckedChanged += delegate { OnTransferDirectionChanged(); };
+            transferToComputerRadioButton.CheckedChanged += delegate { OnTransferDirectionChanged(); };
             browseTransferButton.Click += delegate { ShowTransferBrowseMenu(); };
+            browseTransferTargetButton.Click += delegate { BrowseTransferTarget(); };
             browseTransferFileMenuItem.Click += delegate { BrowseTransferFile(); };
             browseTransferFolderMenuItem.Click += delegate { BrowseTransferFolder(); };
             sendTransferButton.Click += delegate { StartFileTransfer(); };
@@ -604,8 +642,8 @@ namespace ApkInstallTool
             logRecordLevelComboBox.SelectedIndexChanged += delegate { SaveConfig(); };
             logRecordThreadInfoCheckBox.CheckedChanged += delegate { SaveConfig(); };
             logRecordTimeInfoCheckBox.CheckedChanged += delegate { SaveConfig(); };
-            transferPathTextBox.TextChanged += delegate { UpdateTransferStatus(); SaveConfig(); };
-            transferTargetDirTextBox.TextChanged += delegate { UpdateTransferStatus(); SaveConfig(); };
+            transferPathTextBox.TextChanged += delegate { OnTransferFieldChanged(); };
+            transferTargetDirTextBox.TextChanged += delegate { OnTransferFieldChanged(); };
             DragEnter += OnDragEnter;
             DragDrop += OnDragDrop;
             FormClosing += OnFormClosing;
@@ -621,7 +659,10 @@ namespace ApkInstallTool
 
         private void InitTransferDefaults()
         {
-            transferTargetDirTextBox.Text = "/sdcard/Download/";
+            lastPushTargetDir = "/sdcard/Download";
+            lastPullSourcePath = "/sdcard/Download";
+            lastPullTargetDir = GetDefaultTransferPullTargetDir();
+            ApplyTransferDirectionUi();
         }
 
         private void BrowseLogRecordFile()
@@ -1083,7 +1124,9 @@ namespace ApkInstallTool
             logRecordTimeInfoCheckBox.Enabled = !running;
             transferPathTextBox.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             transferTargetDirTextBox.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            browseTransferButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
+            transferToDeviceRadioButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
+            transferToComputerRadioButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
+            UpdateTransferBrowseButtons();
             sendTransferButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             refreshButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
             deviceList.Enabled = !running && !isExecuting;
@@ -1354,7 +1397,9 @@ namespace ApkInstallTool
             logRecordTimeInfoCheckBox.Enabled = !running && !isExecuting && !isLogcatRunning;
             transferPathTextBox.Enabled = !running && !isExecuting;
             transferTargetDirTextBox.Enabled = !running && !isExecuting;
-            browseTransferButton.Enabled = !running && !isExecuting;
+            transferToDeviceRadioButton.Enabled = !running && !isExecuting;
+            transferToComputerRadioButton.Enabled = !running && !isExecuting;
+            UpdateTransferBrowseButtons();
             sendTransferButton.Enabled = !running && !isExecuting && !isLogcatRunning;
             deviceList.Enabled = !running && !isExecuting && !isLogcatRunning;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
@@ -1421,10 +1466,21 @@ namespace ApkInstallTool
                 if (includeTimeInfo.HasValue) logRecordTimeInfoCheckBox.Checked = includeTimeInfo.Value;
 
                 var lastTransferPath = ReadJsonString(json, "lastTransferPath");
-                if (!string.IsNullOrWhiteSpace(lastTransferPath) && (File.Exists(lastTransferPath) || Directory.Exists(lastTransferPath))) transferPathTextBox.Text = lastTransferPath;
+                if (!string.IsNullOrWhiteSpace(lastTransferPath) && (File.Exists(lastTransferPath) || Directory.Exists(lastTransferPath))) lastPushSourcePath = lastTransferPath;
 
                 var lastTransferTargetDir = ReadJsonString(json, "lastTransferTargetDir");
-                if (!string.IsNullOrWhiteSpace(lastTransferTargetDir)) transferTargetDirTextBox.Text = lastTransferTargetDir;
+                if (!string.IsNullOrWhiteSpace(lastTransferTargetDir)) lastPushTargetDir = lastTransferTargetDir;
+
+                var pullSourcePath = ReadJsonString(json, "lastPullSourcePath");
+                if (!string.IsNullOrWhiteSpace(pullSourcePath)) lastPullSourcePath = pullSourcePath;
+
+                var pullTargetDir = ReadJsonString(json, "lastPullTargetDir");
+                if (!string.IsNullOrWhiteSpace(pullTargetDir)) lastPullTargetDir = pullTargetDir;
+
+                var transferDirection = ReadJsonString(json, "lastTransferDirection");
+                transferToComputerRadioButton.Checked = string.Equals(transferDirection, "toComputer", StringComparison.OrdinalIgnoreCase);
+                transferToDeviceRadioButton.Checked = !transferToComputerRadioButton.Checked;
+                ApplyTransferDirectionUi();
             }
             catch { AddLogLine("Read config failed, ignored."); }
             finally { loadingConfig = false; }
@@ -1440,6 +1496,7 @@ namespace ApkInstallTool
             try
             {
                 if (!configReady || loadingConfig) return;
+                StoreTransferFieldsForCurrentDirection();
                 var lastApkPath = lastApkPathOverride ?? apkTextBox.Text;
                 var json =
                     "{\r\n" +
@@ -1450,8 +1507,11 @@ namespace ApkInstallTool
                     "    \"logRecordLevel\":  \"" + EscapeJsonString(GetSelectedLogRecordLevel()) + "\",\r\n" +
                     "    \"logRecordIncludeThreadInfo\":  " + (logRecordThreadInfoCheckBox.Checked ? "true" : "false") + ",\r\n" +
                     "    \"logRecordIncludeTimeInfo\":  " + (logRecordTimeInfoCheckBox.Checked ? "true" : "false") + ",\r\n" +
-                    "    \"lastTransferPath\":  \"" + EscapeJsonString(transferPathTextBox.Text) + "\",\r\n" +
-                    "    \"lastTransferTargetDir\":  \"" + EscapeJsonString(transferTargetDirTextBox.Text) + "\",\r\n" +
+                    "    \"lastTransferDirection\":  \"" + EscapeJsonString(CurrentTransferDirection == TransferDirection.ToComputer ? "toComputer" : "toDevice") + "\",\r\n" +
+                    "    \"lastTransferPath\":  \"" + EscapeJsonString(lastPushSourcePath) + "\",\r\n" +
+                    "    \"lastTransferTargetDir\":  \"" + EscapeJsonString(lastPushTargetDir) + "\",\r\n" +
+                    "    \"lastPullSourcePath\":  \"" + EscapeJsonString(lastPullSourcePath) + "\",\r\n" +
+                    "    \"lastPullTargetDir\":  \"" + EscapeJsonString(lastPullTargetDir) + "\",\r\n" +
                     "    \"updatedAt\":  \"" + DateTime.Now.ToString("s") + "\"\r\n" +
                     "}\r\n";
                 File.WriteAllText(configPath, json, Encoding.UTF8);
@@ -1487,9 +1547,98 @@ namespace ApkInstallTool
                 .Replace("\t", "\\t");
         }
 
+        private TransferDirection CurrentTransferDirection
+        {
+            get { return transferToComputerRadioButton.Checked ? TransferDirection.ToComputer : TransferDirection.ToDevice; }
+        }
+
+        private void OnTransferDirectionChanged()
+        {
+            if (updatingTransferFields) return;
+            ApplyTransferDirectionUi();
+            SaveConfig();
+        }
+
+        private void OnTransferFieldChanged()
+        {
+            if (updatingTransferFields) return;
+            StoreTransferFieldsForCurrentDirection();
+            UpdateTransferStatus();
+            SaveConfig();
+        }
+
+        private void StoreTransferFieldsForCurrentDirection()
+        {
+            if (CurrentTransferDirection == TransferDirection.ToComputer)
+            {
+                lastPullSourcePath = transferPathTextBox.Text.Trim();
+                lastPullTargetDir = transferTargetDirTextBox.Text.Trim();
+            }
+            else
+            {
+                lastPushSourcePath = transferPathTextBox.Text.Trim();
+                lastPushTargetDir = transferTargetDirTextBox.Text.Trim();
+            }
+        }
+
+        private void ApplyTransferDirectionUi()
+        {
+            updatingTransferFields = true;
+            try
+            {
+                if (CurrentTransferDirection == TransferDirection.ToComputer)
+                {
+                    transferSourceLabel.Text = "\u8bbe\u5907\u8def\u5f84";
+                    transferTargetLabel.Text = "\u672c\u5730\u76ee\u5f55";
+                    transferPathTextBox.Text = lastPullSourcePath;
+                    transferTargetDirTextBox.Text = lastPullTargetDir;
+                    sendTransferButton.Text = "\u5bfc\u51fa";
+                    transferStatusLabel.Text = "\u8bf7\u8f93\u5165\u8bbe\u5907\u4e0a\u7684\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u8def\u5f84\u3002";
+                }
+                else
+                {
+                    transferSourceLabel.Text = "\u672c\u5730\u8def\u5f84";
+                    transferTargetLabel.Text = "\u8bbe\u5907\u76ee\u5f55";
+                    transferPathTextBox.Text = lastPushSourcePath;
+                    transferTargetDirTextBox.Text = lastPushTargetDir;
+                    sendTransferButton.Text = "\u53d1\u9001";
+                    transferStatusLabel.Text = "\u8bf7\u9009\u62e9\u8981\u53d1\u9001\u7684\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u3002";
+                }
+            }
+            finally
+            {
+                updatingTransferFields = false;
+            }
+            UpdateTransferBrowseButtons();
+            UpdateTransferStatus();
+        }
+
+        private void UpdateTransferBrowseButtons()
+        {
+            var canBrowseSource = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && CurrentTransferDirection == TransferDirection.ToDevice;
+            var canBrowseTarget = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && CurrentTransferDirection == TransferDirection.ToComputer;
+            browseTransferButton.Enabled = canBrowseSource;
+            browseTransferButton.Visible = canBrowseSource;
+            browseTransferTargetButton.Enabled = canBrowseTarget;
+            browseTransferTargetButton.Visible = canBrowseTarget;
+        }
+
         private void ShowTransferBrowseMenu()
         {
+            if (CurrentTransferDirection == TransferDirection.ToComputer) return;
             transferBrowseMenu.Show(browseTransferButton, new Point(0, browseTransferButton.Height));
+        }
+
+        private void BrowseTransferTarget()
+        {
+            if (CurrentTransferDirection != TransferDirection.ToComputer) return;
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "\u9009\u62e9\u4fdd\u5b58\u5230\u7535\u8111\u7684\u6587\u4ef6\u5939";
+                var currentDir = GetInitialDirectoryFromPath(transferTargetDirTextBox.Text);
+                if (!string.IsNullOrEmpty(currentDir)) dialog.SelectedPath = currentDir;
+                if (dialog.ShowDialog(this) == DialogResult.OK) transferTargetDirTextBox.Text = dialog.SelectedPath;
+            }
         }
 
         private void BrowseTransferFile()
@@ -1518,6 +1667,30 @@ namespace ApkInstallTool
 
         private void UpdateTransferStatus()
         {
+            if (CurrentTransferDirection == TransferDirection.ToComputer)
+            {
+                var remotePath = NormalizeDevicePath(transferPathTextBox.Text);
+                var localTargetDir = ResolveTransferLocalPath(transferTargetDirTextBox.Text);
+                if (string.IsNullOrWhiteSpace(remotePath))
+                {
+                    transferStatusLabel.Text = "\u8bf7\u8f93\u5165\u8bbe\u5907\u4e0a\u7684\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u8def\u5f84\u3002";
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(localTargetDir))
+                {
+                    transferStatusLabel.Text = "\u8bf7\u9009\u62e9\u672c\u5730\u4fdd\u5b58\u76ee\u5f55\u3002";
+                    return;
+                }
+                if (File.Exists(localTargetDir))
+                {
+                    transferStatusLabel.Text = "\u672c\u5730\u76ee\u6807\u4e0d\u80fd\u662f\u6587\u4ef6\u3002";
+                    return;
+                }
+
+                transferStatusLabel.Text = "\u8bbe\u5907\u8def\u5f84\uff1a" + remotePath + "  ->  " + Path.Combine(localTargetDir, SanitizeLocalFileName(GetDevicePathName(remotePath)));
+                return;
+            }
+
             var localPath = ResolveTransferLocalPath(transferPathTextBox.Text);
             var targetDir = NormalizeDeviceDirectory(transferTargetDirTextBox.Text);
             if (string.IsNullOrWhiteSpace(localPath))
@@ -1538,23 +1711,41 @@ namespace ApkInstallTool
 
             var name = GetTransferLocalName(localPath);
             var type = File.Exists(localPath) ? "\u6587\u4ef6" : "\u6587\u4ef6\u5939";
-            transferStatusLabel.Text = type + "\uff1a" + name + "  ->  " + JoinDevicePath(targetDir, name);
+            transferStatusLabel.Text = type + "\uff1a" + localPath + "  ->  " + JoinDevicePath(targetDir, name);
         }
 
         private void StartFileTransfer()
         {
             if (isExecuting || isDeviceCommandRunning || isLogcatRunning) return;
-            var localPath = ResolveTransferLocalPath(transferPathTextBox.Text);
-            if (string.IsNullOrWhiteSpace(localPath) || (!File.Exists(localPath) && !Directory.Exists(localPath)))
+            StoreTransferFieldsForCurrentDirection();
+            var direction = CurrentTransferDirection;
+            var sourcePath = direction == TransferDirection.ToComputer ? NormalizeDevicePath(transferPathTextBox.Text) : ResolveTransferLocalPath(transferPathTextBox.Text);
+            var targetPath = direction == TransferDirection.ToComputer ? ResolveTransferLocalPath(transferTargetDirTextBox.Text) : NormalizeDeviceDirectory(transferTargetDirTextBox.Text);
+            if (direction == TransferDirection.ToComputer)
             {
-                MessageBox.Show(this, "\u8bf7\u9009\u62e9\u6709\u6548\u7684\u672c\u5730\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u3002", "APK\u5b89\u88c5\u5de5\u5177", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                if (string.IsNullOrWhiteSpace(sourcePath))
+                {
+                    MessageBox.Show(this, "\u8bf7\u8f93\u5165\u8bbe\u5907\u4e0a\u7684\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u8def\u5f84\u3002", "APK\u5b89\u88c5\u5de5\u5177", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(targetPath) || File.Exists(targetPath))
+                {
+                    MessageBox.Show(this, "\u8bf7\u9009\u62e9\u6709\u6548\u7684\u672c\u5730\u4fdd\u5b58\u76ee\u5f55\u3002", "APK\u5b89\u88c5\u5de5\u5177", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
             }
-            var targetDir = NormalizeDeviceDirectory(transferTargetDirTextBox.Text);
-            if (string.IsNullOrWhiteSpace(targetDir))
+            else
             {
-                MessageBox.Show(this, "\u8bf7\u8f93\u5165\u8bbe\u5907\u76ee\u5f55\u3002", "APK\u5b89\u88c5\u5de5\u5177", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                if (string.IsNullOrWhiteSpace(sourcePath) || (!File.Exists(sourcePath) && !Directory.Exists(sourcePath)))
+                {
+                    MessageBox.Show(this, "\u8bf7\u9009\u62e9\u6709\u6548\u7684\u672c\u5730\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u3002", "APK\u5b89\u88c5\u5de5\u5177", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                if (string.IsNullOrWhiteSpace(targetPath))
+                {
+                    MessageBox.Show(this, "\u8bf7\u8f93\u5165\u8bbe\u5907\u76ee\u5f55\u3002", "APK\u5b89\u88c5\u5de5\u5177", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
             }
             var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
             if (checkedItems.Count == 0)
@@ -1569,33 +1760,34 @@ namespace ApkInstallTool
                 return;
             }
 
-            transferTargetDirTextBox.Text = targetDir;
+            transferTargetDirTextBox.Text = targetPath;
             SaveConfig();
             cancelRequested = false;
             isExecuting = true;
             SetExecutingUi(true);
-            var thread = new Thread(new ThreadStart(delegate { ExecuteFileTransferOnDevices(adb, localPath, targetDir, checkedItems); }));
+            var thread = new Thread(new ThreadStart(delegate { ExecuteFileTransferOnDevices(adb, sourcePath, targetPath, checkedItems, direction); }));
             thread.IsBackground = true;
             thread.Start();
         }
 
-        private void ExecuteFileTransferOnDevices(string adb, string localPath, string targetDir, List<string> checkedItems)
+        private void ExecuteFileTransferOnDevices(string adb, string sourcePath, string targetPath, List<string> checkedItems, TransferDirection direction)
         {
             var successCount = 0;
             var failedCount = 0;
             var skippedCount = 0;
+            var toComputer = direction == TransferDirection.ToComputer;
             try
             {
-                AddLogLine("\u5f00\u59cb\u6587\u4ef6\u4f20\u8f93\uff1a" + localPath + " -> " + targetDir);
+                AddLogLine("\u5f00\u59cb\u6587\u4ef6\u4f20\u8f93\uff1a" + sourcePath + " -> " + targetPath);
                 for (var index = 0; index < checkedItems.Count; index++)
                 {
                     if (cancelRequested) { AddLogLine("\u7528\u6237\u5df2\u4e2d\u6b62\uff0c\u505c\u6b62\u540e\u7eed\u8bbe\u5907\u4f20\u8f93\u3002"); break; }
                     var label = checkedItems[index];
                     DeviceInfo device;
                     if (!deviceMap.TryGetValue(label, out device)) { AddLogLine("\u8df3\u8fc7\u672a\u77e5\u8bbe\u5907\uff1a" + label); skippedCount++; continue; }
-                    AddLogLine("[" + (index + 1) + "/" + checkedItems.Count + "] \u4f20\u8f93\u5230\u8bbe\u5907\uff1a" + label);
+                    AddLogLine("[" + (index + 1) + "/" + checkedItems.Count + "] " + (toComputer ? "\u4ece\u8bbe\u5907\u5bfc\u51fa\uff1a" : "\u4f20\u8f93\u5230\u8bbe\u5907\uff1a") + label);
                     if (device.State != "device") { AddLogLine("\u8bbe\u5907\u4e0d\u53ef\u7528\uff0c\u72b6\u6001\u4e3a " + device.State + "\u3002\u8bf7\u68c0\u67e5 USB \u8c03\u8bd5\u6388\u6743\u3002"); skippedCount++; continue; }
-                    var ok = ExecuteFileTransferForDevice(adb, localPath, targetDir, device.Serial);
+                    var ok = ExecuteFileTransferForDevice(adb, sourcePath, targetPath, device.Serial, direction, checkedItems.Count > 1);
                     if (cancelRequested) break;
                     if (ok) successCount++; else failedCount++;
                 }
@@ -1614,11 +1806,12 @@ namespace ApkInstallTool
             }
         }
 
-        private bool ExecuteFileTransferForDevice(string adb, string localPath, string targetDir, string serial)
+        private bool ExecuteFileTransferForDevice(string adb, string sourcePath, string targetPath, string serial, TransferDirection direction, bool useDeviceSubfolder)
         {
-            if (File.Exists(localPath)) return PushSingleFile(adb, serial, localPath, targetDir);
-            if (Directory.Exists(localPath)) return PushDirectory(adb, serial, localPath, targetDir);
-            AddLogLine("\u672c\u5730\u8def\u5f84\u4e0d\u5b58\u5728\uff1a" + localPath);
+            if (direction == TransferDirection.ToComputer) return PullDevicePath(adb, serial, sourcePath, targetPath, useDeviceSubfolder);
+            if (File.Exists(sourcePath)) return PushSingleFile(adb, serial, sourcePath, targetPath);
+            if (Directory.Exists(sourcePath)) return PushDirectory(adb, serial, sourcePath, targetPath);
+            AddLogLine("\u672c\u5730\u8def\u5f84\u4e0d\u5b58\u5728\uff1a" + sourcePath);
             return false;
         }
 
@@ -1668,6 +1861,41 @@ namespace ApkInstallTool
             return true;
         }
 
+        private bool PullDevicePath(string adb, string serial, string devicePath, string localTargetDir, bool useDeviceSubfolder)
+        {
+            var remotePath = NormalizeDevicePath(devicePath);
+            if (string.IsNullOrWhiteSpace(remotePath))
+            {
+                AddLogLine("\u8bbe\u5907\u8def\u5f84\u4e3a\u7a7a\u3002");
+                return false;
+            }
+
+            try
+            {
+                if (File.Exists(localTargetDir))
+                {
+                    AddLogLine("\u672c\u5730\u76ee\u6807\u4e0d\u80fd\u662f\u6587\u4ef6\uff1a" + localTargetDir);
+                    return false;
+                }
+
+                var finalTargetDir = localTargetDir;
+                if (useDeviceSubfolder) finalTargetDir = Path.Combine(localTargetDir, SanitizeLocalFileName(serial));
+                Directory.CreateDirectory(finalTargetDir);
+
+                AddLogLine("\u5bfc\u51fa\u8bbe\u5907\u8def\u5f84\uff1a" + remotePath + " -> " + Path.Combine(finalTargetDir, SanitizeLocalFileName(GetDevicePathName(remotePath))));
+                var result = InvokeProcess(adb, new[] { "-s", serial, "pull", remotePath, finalTargetDir }, true);
+                if (cancelRequested) return false;
+                if (result.ExitCode == 0) { AddLogLine("\u5bfc\u51fa\u6210\u529f\uff1a" + finalTargetDir); return true; }
+                AddLogLine("\u5bfc\u51fa\u5931\u8d25\uff1a" + HumanizeAdbOutput(result.Output));
+                return false;
+            }
+            catch (Exception ex)
+            {
+                AddLogLine("\u521b\u5efa\u672c\u5730\u76ee\u5f55\u5931\u8d25\uff1a" + ex.Message);
+                return false;
+            }
+        }
+
         private bool EnsureDeviceDirectory(string adb, string serial, string remoteDir)
         {
             remoteDir = NormalizeDeviceDirectory(remoteDir);
@@ -1695,6 +1923,11 @@ namespace ApkInstallTool
             return path;
         }
 
+        private static string NormalizeDevicePath(string path)
+        {
+            return NormalizeDeviceDirectory(path);
+        }
+
         private static string JoinDevicePath(string left, string right)
         {
             left = NormalizeDeviceDirectory(left) ?? "";
@@ -1708,6 +1941,39 @@ namespace ApkInstallTool
         {
             if (File.Exists(path)) return Path.GetFileName(path);
             return new DirectoryInfo(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).Name;
+        }
+
+        private static string GetDevicePathName(string path)
+        {
+            path = NormalizeDevicePath(path);
+            if (string.IsNullOrWhiteSpace(path) || path == "/") return "device-files";
+            var index = path.LastIndexOf('/');
+            var name = index >= 0 ? path.Substring(index + 1) : path;
+            return string.IsNullOrWhiteSpace(name) ? "device-files" : name;
+        }
+
+        private static string SanitizeLocalFileName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "device";
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(value.Length);
+            foreach (var ch in value) builder.Append(invalidChars.Contains(ch) ? '_' : ch);
+            var name = builder.ToString().Trim();
+            return name.Length == 0 ? "device" : name;
+        }
+
+        private static string GetDefaultTransferPullTargetDir()
+        {
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrWhiteSpace(userProfile))
+            {
+                var downloads = Path.Combine(userProfile, "Downloads");
+                if (Directory.Exists(downloads)) return downloads;
+            }
+
+            var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrWhiteSpace(documents)) return documents;
+            return AppDomain.CurrentDomain.BaseDirectory;
         }
 
         private static string GetRelativeDevicePath(string rootPath, string childPath)
@@ -2112,7 +2378,9 @@ namespace ApkInstallTool
             browseLogRecordFolderButton.Enabled = !executing && !isLogcatRunning;
             transferPathTextBox.Enabled = !executing;
             transferTargetDirTextBox.Enabled = !executing;
-            browseTransferButton.Enabled = !executing;
+            transferToDeviceRadioButton.Enabled = !executing && !isDeviceCommandRunning;
+            transferToComputerRadioButton.Enabled = !executing && !isDeviceCommandRunning;
+            UpdateTransferBrowseButtons();
             sendTransferButton.Enabled = !executing && !isLogcatRunning && !isDeviceCommandRunning;
             cancelButton.Enabled = executing || isDeviceCommandRunning;
             Cursor = executing ? Cursors.WaitCursor : Cursors.Default;
