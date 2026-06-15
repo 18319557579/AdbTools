@@ -4,6 +4,7 @@ install-apk.config.json
 # Runtime logs
 log/
 *.log
+screenshots/
 
 # Local executable backups
 *.bak

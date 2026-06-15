@@ -35,6 +35,7 @@ namespace ApkInstallTool
         private readonly TabPage connectionTab = new TabPage("设备连接");
         private readonly TabPage logRecordTab = new TabPage("日志录制");
         private readonly TabPage fileTransferTab = new TabPage("文件传输");
+        private readonly TabPage screenshotTab = new TabPage("截屏");
         private readonly TextBox apkTextBox = new TextBox();
         private readonly Button browseButton = new Button();
         private readonly Button refreshButton = new Button();
@@ -84,11 +85,20 @@ namespace ApkInstallTool
         private readonly ToolStripMenuItem browseTransferFileMenuItem = new ToolStripMenuItem("选择文件");
         private readonly ToolStripMenuItem browseTransferFolderMenuItem = new ToolStripMenuItem("选择文件夹");
 
+        private readonly TextBox screenshotOutputDirTextBox = new TextBox();
+        private readonly Button browseScreenshotOutputDirButton = new Button();
+        private readonly Button takeScreenshotButton = new Button();
+        private readonly Button saveScreenshotAsButton = new Button();
+        private readonly Button openScreenshotDirButton = new Button();
+        private readonly Label screenshotStatusLabel = new Label();
+        private readonly PictureBox screenshotPreviewBox = new PictureBox();
+
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
         private readonly object processLock = new object();
         private readonly string appDir;
         private readonly string configPath;
         private readonly string logDir;
+        private readonly string screenshotDir;
         private Process currentProcess;
         private Process logcatProcess;
         private StreamWriter logcatWriter;
@@ -105,6 +115,7 @@ namespace ApkInstallTool
         private volatile bool isExecuting;
         private volatile bool isDeviceCommandRunning;
         private volatile bool isLogcatRunning;
+        private volatile bool isScreenshotRunning;
         private bool loadingConfig;
         private bool configReady;
         private bool updatingTransferFields;
@@ -112,6 +123,7 @@ namespace ApkInstallTool
         private string lastPushTargetDir = "/sdcard/Download";
         private string lastPullSourcePath = "/sdcard/Download";
         private string lastPullTargetDir = "";
+        private string lastScreenshotPath = "";
         private ApkInfo currentApkInfo;
 
         public MainForm()
@@ -119,6 +131,7 @@ namespace ApkInstallTool
             appDir = AppDomain.CurrentDomain.BaseDirectory;
             configPath = Path.Combine(appDir, "install-apk.config.json");
             logDir = Path.Combine(appDir, "log");
+            screenshotDir = Path.Combine(appDir, "screenshots");
             Text = "APK安装工具";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(1080, 820);
@@ -128,8 +141,10 @@ namespace ApkInstallTool
             BuildUi();
             WireEvents();
             Directory.CreateDirectory(logDir);
+            Directory.CreateDirectory(screenshotDir);
             InitLogcatDefaults();
             InitTransferDefaults();
+            InitScreenshotDefaults();
             LoadConfig();
             configReady = true;
             UpdateExecutionOptionState();
@@ -156,11 +171,13 @@ namespace ApkInstallTool
             tabControl.TabPages.Add(connectionTab);
             tabControl.TabPages.Add(logRecordTab);
             tabControl.TabPages.Add(fileTransferTab);
+            tabControl.TabPages.Add(screenshotTab);
             root.Controls.Add(tabControl, 0, 0);
             BuildInstallTab();
             BuildConnectionTab();
             BuildLogRecordTab();
             BuildFileTransferTab();
+            BuildScreenshotTab();
             BuildSharedDeviceArea(root);
             BuildSharedLogArea(root);
         }
@@ -527,6 +544,72 @@ namespace ApkInstallTool
             transferBrowseMenu.Items.AddRange(new ToolStripItem[] { browseTransferFileMenuItem, browseTransferFolderMenuItem });
         }
 
+        private void BuildScreenshotTab()
+        {
+            screenshotTab.Padding = new Padding(10);
+            var panel = new TableLayoutPanel();
+            panel.Dock = DockStyle.Fill;
+            panel.ColumnCount = 1;
+            panel.RowCount = 4;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            screenshotTab.Controls.Add(panel);
+
+            var pathPanel = new TableLayoutPanel();
+            pathPanel.Dock = DockStyle.Fill;
+            pathPanel.ColumnCount = 3;
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            panel.Controls.Add(pathPanel, 0, 0);
+
+            var outputLabel = new Label();
+            outputLabel.Text = "保存目录";
+            outputLabel.Dock = DockStyle.Fill;
+            outputLabel.TextAlign = ContentAlignment.MiddleLeft;
+            pathPanel.Controls.Add(outputLabel, 0, 0);
+            screenshotOutputDirTextBox.Dock = DockStyle.Fill;
+            screenshotOutputDirTextBox.Margin = new Padding(0, 4, 8, 4);
+            pathPanel.Controls.Add(screenshotOutputDirTextBox, 1, 0);
+            browseScreenshotOutputDirButton.Text = "选择...";
+            browseScreenshotOutputDirButton.Dock = DockStyle.Fill;
+            browseScreenshotOutputDirButton.Margin = new Padding(0, 3, 0, 3);
+            pathPanel.Controls.Add(browseScreenshotOutputDirButton, 2, 0);
+
+            var actionPanel = new TableLayoutPanel();
+            actionPanel.Dock = DockStyle.Fill;
+            actionPanel.ColumnCount = 4;
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.Controls.Add(actionPanel, 0, 1);
+            takeScreenshotButton.Text = "截屏";
+            saveScreenshotAsButton.Text = "另存为...";
+            openScreenshotDirButton.Text = "打开目录";
+            AddActionButton(actionPanel, takeScreenshotButton, 0);
+            AddActionButton(actionPanel, saveScreenshotAsButton, 1);
+            AddActionButton(actionPanel, openScreenshotDirButton, 2);
+            saveScreenshotAsButton.Enabled = false;
+            openScreenshotDirButton.Enabled = false;
+
+            screenshotStatusLabel.Text = "请选择一台 device 状态的目标设备后截屏。";
+            screenshotStatusLabel.Dock = DockStyle.Fill;
+            screenshotStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            screenshotStatusLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            screenshotStatusLabel.AutoEllipsis = true;
+            panel.Controls.Add(screenshotStatusLabel, 0, 2);
+
+            screenshotPreviewBox.Dock = DockStyle.Fill;
+            screenshotPreviewBox.BackColor = Color.FromArgb(245, 245, 245);
+            screenshotPreviewBox.BorderStyle = BorderStyle.FixedSingle;
+            screenshotPreviewBox.SizeMode = PictureBoxSizeMode.Zoom;
+            screenshotPreviewBox.TabStop = false;
+            panel.Controls.Add(screenshotPreviewBox, 0, 3);
+        }
+
         private void AddLabel(TableLayoutPanel panel, string text, int column)
         {
             var label = new Label();
@@ -634,6 +717,10 @@ namespace ApkInstallTool
             browseTransferFileMenuItem.Click += delegate { BrowseTransferFile(); };
             browseTransferFolderMenuItem.Click += delegate { BrowseTransferFolder(); };
             sendTransferButton.Click += delegate { StartFileTransfer(); };
+            browseScreenshotOutputDirButton.Click += delegate { BrowseScreenshotOutputDir(); };
+            takeScreenshotButton.Click += delegate { StartScreenshot(); };
+            saveScreenshotAsButton.Click += delegate { SaveScreenshotAs(); };
+            openScreenshotDirButton.Click += delegate { OpenScreenshotDirectory(); };
             logRecordStatusTimer.Interval = 1000;
             logRecordStatusTimer.Tick += delegate { UpdateLogRecordStatus(); };
             logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
@@ -644,6 +731,7 @@ namespace ApkInstallTool
             logRecordTimeInfoCheckBox.CheckedChanged += delegate { SaveConfig(); };
             transferPathTextBox.TextChanged += delegate { OnTransferFieldChanged(); };
             transferTargetDirTextBox.TextChanged += delegate { OnTransferFieldChanged(); };
+            screenshotOutputDirTextBox.TextChanged += delegate { SaveConfig(); };
             DragEnter += OnDragEnter;
             DragDrop += OnDragDrop;
             FormClosing += OnFormClosing;
@@ -663,6 +751,12 @@ namespace ApkInstallTool
             lastPullSourcePath = "/sdcard/Download";
             lastPullTargetDir = GetDefaultTransferPullTargetDir();
             ApplyTransferDirectionUi();
+        }
+
+        private void InitScreenshotDefaults()
+        {
+            screenshotOutputDirTextBox.Text = screenshotDir;
+            screenshotStatusLabel.Text = "请选择一台 device 状态的目标设备后截屏。";
         }
 
         private void BrowseLogRecordFile()
@@ -691,7 +785,7 @@ namespace ApkInstallTool
 
         private void StartLogRecording()
         {
-            if (isLogcatRunning) return;
+            if (isLogcatRunning || isExecuting || isDeviceCommandRunning || isScreenshotRunning) return;
             var device = GetSingleCheckedDeviceForLogRecording();
             if (device == null) return;
             var outputPath = PrepareLogRecordOutputPath();
@@ -705,7 +799,7 @@ namespace ApkInstallTool
 
         private void ClearLogcatCache()
         {
-            if (isLogcatRunning || isExecuting || isDeviceCommandRunning) return;
+            if (isLogcatRunning || isExecuting || isDeviceCommandRunning || isScreenshotRunning) return;
             var device = GetSingleCheckedDeviceForLogRecording();
             if (device == null) return;
             RunDeviceCommand("清除日志缓存", new[] { "-s", device.Serial, "logcat", "-c" });
@@ -713,7 +807,7 @@ namespace ApkInstallTool
 
         private void ExportLogcatCache()
         {
-            if (isLogcatRunning || isExecuting || isDeviceCommandRunning) return;
+            if (isLogcatRunning || isExecuting || isDeviceCommandRunning || isScreenshotRunning) return;
             var device = GetSingleCheckedDeviceForLogRecording();
             if (device == null) return;
             var outputPath = PrepareLogRecordOutputPath();
@@ -1110,26 +1204,44 @@ namespace ApkInstallTool
 
         private void SetLogcatUi(bool running)
         {
-            clearLogcatCacheButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            exportLogcatCacheButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            startLogRecordButton.Enabled = !running;
+            var busy = running || isExecuting || isDeviceCommandRunning || isScreenshotRunning;
+            browseButton.Enabled = !busy;
+            connectButton.Enabled = !busy;
+            disconnectButton.Enabled = !busy;
+            connectAddressTextBox.Enabled = !busy;
+            installButton.Enabled = !busy;
+            installModeRadioButton.Enabled = !busy;
+            cleanInstallModeRadioButton.Enabled = !busy;
+            uninstallModeRadioButton.Enabled = !busy;
+            clearDataModeRadioButton.Enabled = !busy;
+            startAppModeRadioButton.Enabled = !busy;
+            apkTextBox.Enabled = !busy;
+            launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
+            clearLogcatCacheButton.Enabled = !busy;
+            exportLogcatCacheButton.Enabled = !busy;
+            startLogRecordButton.Enabled = !busy;
             stopLogRecordButton.Enabled = running;
-            browseLogRecordFileButton.Enabled = !running;
-            browseLogRecordFolderButton.Enabled = !running;
-            logRecordPathTextBox.Enabled = !running;
-            logRecordTagTextBox.Enabled = !running;
-            logRecordPackageTextBox.Enabled = !running;
-            logRecordLevelComboBox.Enabled = !running;
-            logRecordThreadInfoCheckBox.Enabled = !running;
-            logRecordTimeInfoCheckBox.Enabled = !running;
-            transferPathTextBox.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            transferTargetDirTextBox.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            transferToDeviceRadioButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            transferToComputerRadioButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
+            browseLogRecordFileButton.Enabled = !busy;
+            browseLogRecordFolderButton.Enabled = !busy;
+            logRecordPathTextBox.Enabled = !busy;
+            logRecordTagTextBox.Enabled = !busy;
+            logRecordPackageTextBox.Enabled = !busy;
+            logRecordLevelComboBox.Enabled = !busy;
+            logRecordThreadInfoCheckBox.Enabled = !busy;
+            logRecordTimeInfoCheckBox.Enabled = !busy;
+            transferPathTextBox.Enabled = !busy;
+            transferTargetDirTextBox.Enabled = !busy;
+            transferToDeviceRadioButton.Enabled = !busy;
+            transferToComputerRadioButton.Enabled = !busy;
             UpdateTransferBrowseButtons();
-            sendTransferButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            refreshButton.Enabled = !running && !isExecuting && !isDeviceCommandRunning;
-            deviceList.Enabled = !running && !isExecuting;
+            sendTransferButton.Enabled = !busy;
+            screenshotOutputDirTextBox.Enabled = !busy;
+            browseScreenshotOutputDirButton.Enabled = !busy;
+            takeScreenshotButton.Enabled = !busy;
+            saveScreenshotAsButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            openScreenshotDirButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            refreshButton.Enabled = !busy;
+            deviceList.Enabled = !busy;
         }
 
         private string PrepareLogRecordOutputPath()
@@ -1286,6 +1398,310 @@ namespace ApkInstallTool
             return device;
         }
 
+        private DeviceInfo GetSingleCheckedDeviceForScreenshot()
+        {
+            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
+            if (checkedItems.Count == 0)
+            {
+                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            if (checkedItems.Count > 1)
+            {
+                MessageBox.Show(this, "截屏一次只能选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            DeviceInfo device;
+            if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
+            {
+                MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            return device;
+        }
+
+        private void BrowseScreenshotOutputDir()
+        {
+            using (var dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "选择截屏保存目录";
+                var currentDir = ResolveScreenshotOutputDir(screenshotOutputDirTextBox.Text);
+                if (!string.IsNullOrWhiteSpace(currentDir) && Directory.Exists(currentDir)) dialog.SelectedPath = currentDir;
+                if (dialog.ShowDialog(this) == DialogResult.OK) screenshotOutputDirTextBox.Text = dialog.SelectedPath;
+            }
+        }
+
+        private void StartScreenshot()
+        {
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || isScreenshotRunning) return;
+            var device = GetSingleCheckedDeviceForScreenshot();
+            if (device == null) return;
+            var outputDir = PrepareScreenshotOutputDir();
+            if (outputDir == null) return;
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var outputPath = Path.Combine(outputDir, GenerateScreenshotFileName(device.Serial));
+            SaveConfig();
+            cancelRequested = false;
+            isScreenshotRunning = true;
+            SetScreenshotUi(true);
+            var thread = new Thread(new ThreadStart(delegate { ExecuteScreenshot(adb, device, outputPath); }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private void ExecuteScreenshot(string adb, DeviceInfo device, string outputPath)
+        {
+            var success = false;
+            try
+            {
+                var deviceLabel = string.IsNullOrWhiteSpace(device.Label) ? device.Serial : device.Label;
+                AddLogLine("开始截屏：" + deviceLabel);
+                success = TryCaptureScreenshotExecOut(adb, device.Serial, outputPath);
+                if (!success && !cancelRequested)
+                {
+                    AddLogLine("exec-out 截屏失败，尝试兼容模式...");
+                    success = TryCaptureScreenshotFallback(adb, device.Serial, outputPath);
+                }
+
+                if (cancelRequested)
+                {
+                    SafeDeleteFile(outputPath);
+                    AddLogLine("截屏已中止。");
+                    SetStatus("截屏已中止");
+                    return;
+                }
+
+                if (success && LoadScreenshotPreview(outputPath, "截屏成功"))
+                {
+                    AddLogLine("截屏保存成功：" + outputPath);
+                    SetStatus("截屏完成");
+                }
+                else
+                {
+                    SafeDeleteFile(outputPath);
+                    AddLogLine("截屏失败：未生成有效 PNG。");
+                    SetStatus("截屏失败");
+                }
+                SaveRunLog();
+            }
+            catch (Exception ex)
+            {
+                SafeDeleteFile(outputPath);
+                AddLogLine("截屏异常：" + ex.Message);
+                SetStatus("截屏异常");
+            }
+            finally
+            {
+                isScreenshotRunning = false;
+                cancelRequested = false;
+                ClearCurrentProcess();
+                BeginInvokeIfNeeded(delegate { SetScreenshotUi(false); });
+            }
+        }
+
+        private bool TryCaptureScreenshotExecOut(string adb, string serial, string outputPath)
+        {
+            var result = InvokeProcessBinaryToFile(adb, new[] { "-s", serial, "exec-out", "screencap", "-p" }, outputPath, true);
+            if (cancelRequested) return false;
+            if (result.ExitCode != 0)
+            {
+                AddLogLine("exec-out 截屏失败：" + HumanizeAdbOutput(result.Output));
+                SafeDeleteFile(outputPath);
+                return false;
+            }
+            if (!IsValidPngFile(outputPath))
+            {
+                AddLogLine("exec-out 输出不是有效 PNG。");
+                SafeDeleteFile(outputPath);
+                return false;
+            }
+            return true;
+        }
+
+        private bool TryCaptureScreenshotFallback(string adb, string serial, string outputPath)
+        {
+            var remotePath = "/data/local/tmp/adb-tools-screenshot-" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "-" + SanitizeLocalFileName(serial) + ".png";
+            try
+            {
+                var captureResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "screencap", "-p", ShellQuote(remotePath) }, true);
+                if (cancelRequested) return false;
+                if (captureResult.ExitCode != 0)
+                {
+                    AddLogLine("兼容模式截屏失败：" + HumanizeAdbOutput(captureResult.Output));
+                    return false;
+                }
+
+                var pullResult = InvokeProcess(adb, new[] { "-s", serial, "pull", remotePath, outputPath }, true);
+                if (cancelRequested) return false;
+                if (pullResult.ExitCode != 0)
+                {
+                    AddLogLine("拉取截屏失败：" + HumanizeAdbOutput(pullResult.Output));
+                    SafeDeleteFile(outputPath);
+                    return false;
+                }
+                if (!IsValidPngFile(outputPath))
+                {
+                    AddLogLine("兼容模式输出不是有效 PNG。");
+                    SafeDeleteFile(outputPath);
+                    return false;
+                }
+                return true;
+            }
+            finally
+            {
+                InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "rm", "-f", ShellQuote(remotePath) });
+            }
+        }
+
+        private string PrepareScreenshotOutputDir()
+        {
+            var outputDir = ResolveScreenshotOutputDir(screenshotOutputDirTextBox.Text);
+            if (string.IsNullOrWhiteSpace(outputDir))
+            {
+                MessageBox.Show(this, "请输入截屏保存目录。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            if (File.Exists(outputDir))
+            {
+                MessageBox.Show(this, "截屏保存目录不能是文件。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            try
+            {
+                Directory.CreateDirectory(outputDir);
+                screenshotOutputDirTextBox.Text = outputDir;
+                return outputDir;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "无法创建截屏保存目录：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return null;
+            }
+        }
+
+        private string ResolveScreenshotOutputDir(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return screenshotDir;
+            path = path.Trim().Trim('"');
+            return Path.IsPathRooted(path) ? path : Path.GetFullPath(Path.Combine(appDir, path));
+        }
+
+        private static string GenerateScreenshotFileName(string serial)
+        {
+            return "screenshot-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff") + "-" + SanitizeLocalFileName(serial) + ".png";
+        }
+
+        private bool LoadScreenshotPreview(string path, string statusPrefix)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                var size = new FileInfo(path).Length;
+                int width;
+                int height;
+                Bitmap previewImage;
+                using (var image = Image.FromFile(path))
+                {
+                    width = image.Width;
+                    height = image.Height;
+                    previewImage = new Bitmap(image);
+                }
+
+                var status = statusPrefix + "：" + width + " x " + height + "，" + FormatFileSize(size) + "，" + path;
+                BeginInvokeIfNeeded(delegate
+                {
+                    var oldImage = screenshotPreviewBox.Image;
+                    screenshotPreviewBox.Image = previewImage;
+                    if (oldImage != null) oldImage.Dispose();
+                    lastScreenshotPath = path;
+                    screenshotStatusLabel.Text = status;
+                    saveScreenshotAsButton.Enabled = !isScreenshotRunning;
+                    openScreenshotDirButton.Enabled = !isScreenshotRunning;
+                });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AddLogLine("加载截屏预览失败：" + ex.Message);
+                return false;
+            }
+        }
+
+        private void SaveScreenshotAs()
+        {
+            if (string.IsNullOrWhiteSpace(lastScreenshotPath) || !File.Exists(lastScreenshotPath))
+            {
+                MessageBox.Show(this, "当前没有可另存的截屏。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            using (var dialog = new SaveFileDialog())
+            {
+                dialog.Title = "截屏另存为";
+                dialog.Filter = "PNG 图片 (*.png)|*.png|所有文件 (*.*)|*.*";
+                dialog.FileName = Path.GetFileName(lastScreenshotPath);
+                var currentDir = Path.GetDirectoryName(lastScreenshotPath);
+                if (!string.IsNullOrEmpty(currentDir) && Directory.Exists(currentDir)) dialog.InitialDirectory = currentDir;
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                try
+                {
+                    File.Copy(lastScreenshotPath, dialog.FileName, true);
+                    LoadScreenshotPreview(dialog.FileName, "截屏已另存");
+                    AddLogLine("截屏另存为：" + dialog.FileName);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "另存截屏失败：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void OpenScreenshotDirectory()
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath))
+                {
+                    Process.Start("explorer.exe", "/select,\"" + lastScreenshotPath + "\"");
+                    return;
+                }
+
+                var outputDir = ResolveScreenshotOutputDir(screenshotOutputDirTextBox.Text);
+                if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
+                Process.Start("explorer.exe", outputDir);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "打开截屏目录失败：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static bool IsValidPngFile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                var bytes = new byte[8];
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    if (stream.Read(bytes, 0, bytes.Length) != bytes.Length) return false;
+                }
+                return bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 &&
+                       bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A;
+            }
+            catch { return false; }
+        }
+
+        private static void SafeDeleteFile(string path)
+        {
+            try { if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) File.Delete(path); } catch { }
+        }
+
         private Process CreateAdbProcess(string adb, string[] args)
         {
             var startInfo = new ProcessStartInfo();
@@ -1348,7 +1764,7 @@ namespace ApkInstallTool
 
         private void RunDeviceCommand(string title, string[] adbArgs)
         {
-            if (isExecuting || isDeviceCommandRunning) return;
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || isScreenshotRunning) return;
             var adb = FindAdb();
             if (adb == null)
             {
@@ -1379,29 +1795,44 @@ namespace ApkInstallTool
 
         private void SetDeviceCommandUi(bool running)
         {
-            connectButton.Enabled = !running && !isExecuting;
-            disconnectButton.Enabled = !running && !isExecuting;
-            refreshButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            connectAddressTextBox.Enabled = !running && !isExecuting;
-            cancelButton.Enabled = running || isExecuting;
-            clearLogcatCacheButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            exportLogcatCacheButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            startLogRecordButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            browseLogRecordFileButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            browseLogRecordFolderButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            logRecordPathTextBox.Enabled = !running && !isExecuting && !isLogcatRunning;
-            logRecordTagTextBox.Enabled = !running && !isExecuting && !isLogcatRunning;
-            logRecordPackageTextBox.Enabled = !running && !isExecuting && !isLogcatRunning;
-            logRecordLevelComboBox.Enabled = !running && !isExecuting && !isLogcatRunning;
-            logRecordThreadInfoCheckBox.Enabled = !running && !isExecuting && !isLogcatRunning;
-            logRecordTimeInfoCheckBox.Enabled = !running && !isExecuting && !isLogcatRunning;
-            transferPathTextBox.Enabled = !running && !isExecuting;
-            transferTargetDirTextBox.Enabled = !running && !isExecuting;
-            transferToDeviceRadioButton.Enabled = !running && !isExecuting;
-            transferToComputerRadioButton.Enabled = !running && !isExecuting;
+            var busy = running || isExecuting || isLogcatRunning || isScreenshotRunning;
+            browseButton.Enabled = !busy;
+            connectButton.Enabled = !busy;
+            disconnectButton.Enabled = !busy;
+            refreshButton.Enabled = !busy;
+            connectAddressTextBox.Enabled = !busy;
+            cancelButton.Enabled = running || isExecuting || isScreenshotRunning;
+            installButton.Enabled = !busy;
+            installModeRadioButton.Enabled = !busy;
+            cleanInstallModeRadioButton.Enabled = !busy;
+            uninstallModeRadioButton.Enabled = !busy;
+            clearDataModeRadioButton.Enabled = !busy;
+            startAppModeRadioButton.Enabled = !busy;
+            apkTextBox.Enabled = !busy;
+            launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
+            clearLogcatCacheButton.Enabled = !busy;
+            exportLogcatCacheButton.Enabled = !busy;
+            startLogRecordButton.Enabled = !busy;
+            browseLogRecordFileButton.Enabled = !busy;
+            browseLogRecordFolderButton.Enabled = !busy;
+            logRecordPathTextBox.Enabled = !busy;
+            logRecordTagTextBox.Enabled = !busy;
+            logRecordPackageTextBox.Enabled = !busy;
+            logRecordLevelComboBox.Enabled = !busy;
+            logRecordThreadInfoCheckBox.Enabled = !busy;
+            logRecordTimeInfoCheckBox.Enabled = !busy;
+            transferPathTextBox.Enabled = !busy;
+            transferTargetDirTextBox.Enabled = !busy;
+            transferToDeviceRadioButton.Enabled = !busy;
+            transferToComputerRadioButton.Enabled = !busy;
             UpdateTransferBrowseButtons();
-            sendTransferButton.Enabled = !running && !isExecuting && !isLogcatRunning;
-            deviceList.Enabled = !running && !isExecuting && !isLogcatRunning;
+            sendTransferButton.Enabled = !busy;
+            screenshotOutputDirTextBox.Enabled = !busy;
+            browseScreenshotOutputDirButton.Enabled = !busy;
+            takeScreenshotButton.Enabled = !busy;
+            saveScreenshotAsButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            openScreenshotDirButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            deviceList.Enabled = !busy;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
         }
 
@@ -1481,6 +1912,9 @@ namespace ApkInstallTool
                 transferToComputerRadioButton.Checked = string.Equals(transferDirection, "toComputer", StringComparison.OrdinalIgnoreCase);
                 transferToDeviceRadioButton.Checked = !transferToComputerRadioButton.Checked;
                 ApplyTransferDirectionUi();
+
+                var screenshotOutputDir = ReadJsonString(json, "screenshotOutputDir");
+                if (!string.IsNullOrWhiteSpace(screenshotOutputDir)) screenshotOutputDirTextBox.Text = screenshotOutputDir;
             }
             catch { AddLogLine("Read config failed, ignored."); }
             finally { loadingConfig = false; }
@@ -1512,6 +1946,7 @@ namespace ApkInstallTool
                     "    \"lastTransferTargetDir\":  \"" + EscapeJsonString(lastPushTargetDir) + "\",\r\n" +
                     "    \"lastPullSourcePath\":  \"" + EscapeJsonString(lastPullSourcePath) + "\",\r\n" +
                     "    \"lastPullTargetDir\":  \"" + EscapeJsonString(lastPullTargetDir) + "\",\r\n" +
+                    "    \"screenshotOutputDir\":  \"" + EscapeJsonString(screenshotOutputDirTextBox.Text) + "\",\r\n" +
                     "    \"updatedAt\":  \"" + DateTime.Now.ToString("s") + "\"\r\n" +
                     "}\r\n";
                 File.WriteAllText(configPath, json, Encoding.UTF8);
@@ -1615,8 +2050,8 @@ namespace ApkInstallTool
 
         private void UpdateTransferBrowseButtons()
         {
-            var canBrowseSource = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && CurrentTransferDirection == TransferDirection.ToDevice;
-            var canBrowseTarget = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && CurrentTransferDirection == TransferDirection.ToComputer;
+            var canBrowseSource = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && !isScreenshotRunning && CurrentTransferDirection == TransferDirection.ToDevice;
+            var canBrowseTarget = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && !isScreenshotRunning && CurrentTransferDirection == TransferDirection.ToComputer;
             browseTransferButton.Enabled = canBrowseSource;
             browseTransferButton.Visible = canBrowseSource;
             browseTransferTargetButton.Enabled = canBrowseTarget;
@@ -1716,7 +2151,7 @@ namespace ApkInstallTool
 
         private void StartFileTransfer()
         {
-            if (isExecuting || isDeviceCommandRunning || isLogcatRunning) return;
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || isScreenshotRunning) return;
             StoreTransferFieldsForCurrentDirection();
             var direction = CurrentTransferDirection;
             var sourcePath = direction == TransferDirection.ToComputer ? NormalizeDevicePath(transferPathTextBox.Text) : ResolveTransferLocalPath(transferPathTextBox.Text);
@@ -2031,7 +2466,7 @@ namespace ApkInstallTool
 
         private void RefreshDevices()
         {
-            if (isExecuting || isDeviceCommandRunning) return;
+            if (isExecuting || isDeviceCommandRunning || isScreenshotRunning) return;
             deviceList.Items.Clear();
             deviceMap.Clear();
             var adb = FindAdb();
@@ -2105,7 +2540,7 @@ namespace ApkInstallTool
 
         private void StartExecution()
         {
-            if (isExecuting || isDeviceCommandRunning) return;
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || isScreenshotRunning) return;
             var apkPath = apkTextBox.Text.Trim();
             if (!File.Exists(apkPath) || !string.Equals(Path.GetExtension(apkPath), ".apk", StringComparison.OrdinalIgnoreCase))
             {
@@ -2243,7 +2678,7 @@ namespace ApkInstallTool
 
         private void RequestCancel()
         {
-            if (!isExecuting && !isDeviceCommandRunning)
+            if (!isExecuting && !isDeviceCommandRunning && !isScreenshotRunning)
             {
                 if (isLogcatRunning) StopLogcatRecording();
                 else Close();
@@ -2252,7 +2687,7 @@ namespace ApkInstallTool
             cancelRequested = true;
             cancelButton.Enabled = false;
             statusLabel.Text = "正在中止...";
-            AddLogLine("收到中止请求，正在结束当前 adb/aapt 进程...");
+            AddLogLine("收到中止请求，正在结束当前进程...");
             KillCurrentProcess();
         }
 
@@ -2269,6 +2704,53 @@ namespace ApkInstallTool
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
                 while (!process.WaitForExit(150)) if (cancellable && cancelRequested) { TryKill(process); break; }
+                try { process.WaitForExit(); } catch { }
+                return new ProcessResult { ExitCode = cancelRequested && cancellable ? 130 : process.ExitCode, Output = outputBuilder.ToString(), Canceled = cancelRequested && cancellable };
+            }
+            catch (Exception ex) { return new ProcessResult { ExitCode = 1, Output = ex.Message, Canceled = cancelRequested && cancellable }; }
+            finally { if (cancellable) ClearCurrentProcess(process); try { process.Dispose(); } catch { } }
+        }
+
+        private ProcessResult InvokeProcessBinaryToFile(string filePath, string[] arguments, string outputPath, bool cancellable)
+        {
+            var outputBuilder = new StringBuilder();
+            var process = CreateAdbProcess(filePath, arguments);
+            process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+            {
+                if (e.Data != null)
+                {
+                    lock (outputBuilder) outputBuilder.AppendLine(e.Data);
+                    AddLogLine(e.Data);
+                }
+            };
+            try
+            {
+                process.Start();
+                if (cancellable) SetCurrentProcess(process);
+                process.BeginErrorReadLine();
+                using (var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    var buffer = new byte[81920];
+                    while (true)
+                    {
+                        if (cancellable && cancelRequested)
+                        {
+                            TryKill(process);
+                            break;
+                        }
+                        var read = process.StandardOutput.BaseStream.Read(buffer, 0, buffer.Length);
+                        if (read <= 0) break;
+                        output.Write(buffer, 0, read);
+                    }
+                }
+                while (!process.WaitForExit(150))
+                {
+                    if (cancellable && cancelRequested)
+                    {
+                        TryKill(process);
+                        break;
+                    }
+                }
                 try { process.WaitForExit(); } catch { }
                 return new ProcessResult { ExitCode = cancelRequested && cancellable ? 130 : process.ExitCode, Output = outputBuilder.ToString(), Canceled = cancelRequested && cancellable };
             }
@@ -2349,48 +2831,109 @@ namespace ApkInstallTool
 
         private void SetExecutingUi(bool executing)
         {
-            browseButton.Enabled = !executing;
-            refreshButton.Enabled = !executing && !isDeviceCommandRunning && !isLogcatRunning;
-            connectButton.Enabled = !executing && !isDeviceCommandRunning;
-            disconnectButton.Enabled = !executing && !isDeviceCommandRunning;
-            connectAddressTextBox.Enabled = !executing && !isDeviceCommandRunning;
-            installButton.Enabled = !executing;
-            clearLogButton.Enabled = !executing;
-            installModeRadioButton.Enabled = !executing;
-            cleanInstallModeRadioButton.Enabled = !executing;
-            uninstallModeRadioButton.Enabled = !executing;
-            clearDataModeRadioButton.Enabled = !executing;
-            startAppModeRadioButton.Enabled = !executing;
-            apkTextBox.Enabled = !executing;
-            deviceList.Enabled = !executing && !isLogcatRunning;
-            launchAfterInstallCheckBox.Enabled = !executing && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
-            clearLogcatCacheButton.Enabled = !executing && !isLogcatRunning && !isDeviceCommandRunning;
-            exportLogcatCacheButton.Enabled = !executing && !isLogcatRunning && !isDeviceCommandRunning;
-            startLogRecordButton.Enabled = !executing && !isLogcatRunning;
-            stopLogRecordButton.Enabled = isLogcatRunning;
-            logRecordPathTextBox.Enabled = !executing && !isLogcatRunning;
-            logRecordTagTextBox.Enabled = !executing && !isLogcatRunning;
-            logRecordPackageTextBox.Enabled = !executing && !isLogcatRunning;
-            logRecordLevelComboBox.Enabled = !executing && !isLogcatRunning;
-            logRecordThreadInfoCheckBox.Enabled = !executing && !isLogcatRunning;
-            logRecordTimeInfoCheckBox.Enabled = !executing && !isLogcatRunning;
-            browseLogRecordFileButton.Enabled = !executing && !isLogcatRunning;
-            browseLogRecordFolderButton.Enabled = !executing && !isLogcatRunning;
-            transferPathTextBox.Enabled = !executing;
-            transferTargetDirTextBox.Enabled = !executing;
-            transferToDeviceRadioButton.Enabled = !executing && !isDeviceCommandRunning;
-            transferToComputerRadioButton.Enabled = !executing && !isDeviceCommandRunning;
+            var busy = executing || isDeviceCommandRunning || isLogcatRunning || isScreenshotRunning;
+            browseButton.Enabled = !busy;
+            refreshButton.Enabled = !busy;
+            connectButton.Enabled = !busy;
+            disconnectButton.Enabled = !busy;
+            connectAddressTextBox.Enabled = !busy;
+            installButton.Enabled = !busy;
+            clearLogButton.Enabled = !busy;
+            installModeRadioButton.Enabled = !busy;
+            cleanInstallModeRadioButton.Enabled = !busy;
+            uninstallModeRadioButton.Enabled = !busy;
+            clearDataModeRadioButton.Enabled = !busy;
+            startAppModeRadioButton.Enabled = !busy;
+            apkTextBox.Enabled = !busy;
+            deviceList.Enabled = !busy;
+            launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
+            clearLogcatCacheButton.Enabled = !busy;
+            exportLogcatCacheButton.Enabled = !busy;
+            startLogRecordButton.Enabled = !busy;
+            stopLogRecordButton.Enabled = isLogcatRunning && !executing && !isDeviceCommandRunning && !isScreenshotRunning;
+            logRecordPathTextBox.Enabled = !busy;
+            logRecordTagTextBox.Enabled = !busy;
+            logRecordPackageTextBox.Enabled = !busy;
+            logRecordLevelComboBox.Enabled = !busy;
+            logRecordThreadInfoCheckBox.Enabled = !busy;
+            logRecordTimeInfoCheckBox.Enabled = !busy;
+            browseLogRecordFileButton.Enabled = !busy;
+            browseLogRecordFolderButton.Enabled = !busy;
+            transferPathTextBox.Enabled = !busy;
+            transferTargetDirTextBox.Enabled = !busy;
+            transferToDeviceRadioButton.Enabled = !busy;
+            transferToComputerRadioButton.Enabled = !busy;
             UpdateTransferBrowseButtons();
-            sendTransferButton.Enabled = !executing && !isLogcatRunning && !isDeviceCommandRunning;
-            cancelButton.Enabled = executing || isDeviceCommandRunning;
-            Cursor = executing ? Cursors.WaitCursor : Cursors.Default;
+            sendTransferButton.Enabled = !busy;
+            screenshotOutputDirTextBox.Enabled = !busy;
+            browseScreenshotOutputDirButton.Enabled = !busy;
+            takeScreenshotButton.Enabled = !busy;
+            saveScreenshotAsButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            openScreenshotDirButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            cancelButton.Enabled = executing || isDeviceCommandRunning || isScreenshotRunning;
+            Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             statusLabel.Text = executing ? "正在执行..." : statusLabel.Text;
+        }
+
+        private void SetScreenshotUi(bool running)
+        {
+            var busy = running || isExecuting || isDeviceCommandRunning || isLogcatRunning;
+            browseButton.Enabled = !busy;
+            refreshButton.Enabled = !busy;
+            connectButton.Enabled = !busy;
+            disconnectButton.Enabled = !busy;
+            connectAddressTextBox.Enabled = !busy;
+            installButton.Enabled = !busy;
+            clearLogButton.Enabled = !busy;
+            installModeRadioButton.Enabled = !busy;
+            cleanInstallModeRadioButton.Enabled = !busy;
+            uninstallModeRadioButton.Enabled = !busy;
+            clearDataModeRadioButton.Enabled = !busy;
+            startAppModeRadioButton.Enabled = !busy;
+            apkTextBox.Enabled = !busy;
+            deviceList.Enabled = !busy;
+            launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
+            clearLogcatCacheButton.Enabled = !busy;
+            exportLogcatCacheButton.Enabled = !busy;
+            startLogRecordButton.Enabled = !busy;
+            stopLogRecordButton.Enabled = isLogcatRunning && !running && !isExecuting && !isDeviceCommandRunning;
+            logRecordPathTextBox.Enabled = !busy;
+            logRecordTagTextBox.Enabled = !busy;
+            logRecordPackageTextBox.Enabled = !busy;
+            logRecordLevelComboBox.Enabled = !busy;
+            logRecordThreadInfoCheckBox.Enabled = !busy;
+            logRecordTimeInfoCheckBox.Enabled = !busy;
+            browseLogRecordFileButton.Enabled = !busy;
+            browseLogRecordFolderButton.Enabled = !busy;
+            transferPathTextBox.Enabled = !busy;
+            transferTargetDirTextBox.Enabled = !busy;
+            transferToDeviceRadioButton.Enabled = !busy;
+            transferToComputerRadioButton.Enabled = !busy;
+            UpdateTransferBrowseButtons();
+            sendTransferButton.Enabled = !busy;
+            screenshotOutputDirTextBox.Enabled = !busy;
+            browseScreenshotOutputDirButton.Enabled = !busy;
+            takeScreenshotButton.Enabled = !busy;
+            saveScreenshotAsButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            openScreenshotDirButton.Enabled = !busy && !string.IsNullOrWhiteSpace(lastScreenshotPath) && File.Exists(lastScreenshotPath);
+            cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning;
+            Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
+            if (running)
+            {
+                statusLabel.Text = "正在截屏...";
+                screenshotStatusLabel.Text = "正在截屏，请稍候...";
+            }
         }
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
             if (isLogcatRunning) StopLogcatRecording();
-            if (isExecuting || isDeviceCommandRunning) { cancelRequested = true; KillCurrentProcess(); }
+            if (isExecuting || isDeviceCommandRunning || isScreenshotRunning) { cancelRequested = true; KillCurrentProcess(); }
+            if (screenshotPreviewBox.Image != null)
+            {
+                screenshotPreviewBox.Image.Dispose();
+                screenshotPreviewBox.Image = null;
+            }
         }
 
         private void AddLogLine(string text) { BeginInvokeIfNeeded(delegate { logBox.AppendText("[" + DateTime.Now.ToString("HH:mm:ss") + "] " + text + Environment.NewLine); }); }
