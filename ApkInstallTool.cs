@@ -45,9 +45,49 @@ namespace ApkInstallTool
             public int BitRate;
         }
 
+        private sealed class DisplayControlInfo
+        {
+            public int PhysicalWidth;
+            public int PhysicalHeight;
+            public int OverrideWidth;
+            public int OverrideHeight;
+            public int PhysicalDensity;
+            public int OverrideDensity;
+            public bool HasPhysicalSize;
+            public bool HasOverrideSize;
+            public bool HasPhysicalDensity;
+            public bool HasOverrideDensity;
+
+            public bool HasCurrentSize
+            {
+                get { return HasOverrideSize || HasPhysicalSize; }
+            }
+
+            public bool HasCurrentDensity
+            {
+                get { return HasOverrideDensity || HasPhysicalDensity; }
+            }
+
+            public int CurrentWidth
+            {
+                get { return HasOverrideSize ? OverrideWidth : PhysicalWidth; }
+            }
+
+            public int CurrentHeight
+            {
+                get { return HasOverrideSize ? OverrideHeight : PhysicalHeight; }
+            }
+
+            public int CurrentDensity
+            {
+                get { return HasOverrideDensity ? OverrideDensity : PhysicalDensity; }
+            }
+        }
+
         private readonly TabControl tabControl = new TabControl();
         private readonly TabPage installTab = new TabPage("APK 安装");
         private readonly TabPage connectionTab = new TabPage("设备连接");
+        private readonly TabPage displayControlTab = new TabPage("显示控制");
         private readonly TabPage logRecordTab = new TabPage("日志录制");
         private readonly TabPage fileTransferTab = new TabPage("文件传输");
         private readonly TabPage screenshotTab = new TabPage("截屏/录屏");
@@ -115,6 +155,22 @@ namespace ApkInstallTool
         private readonly System.Windows.Forms.Timer screenRecordStatusTimer = new System.Windows.Forms.Timer();
         private readonly ToolTip screenshotToolTip = new ToolTip();
 
+        private readonly Label displayResolutionInfoLabel = new Label();
+        private readonly Label displayDensityInfoLabel = new Label();
+        private readonly Label displayControlStatusLabel = new Label();
+        private readonly TextBox displayWidthTextBox = new TextBox();
+        private readonly TextBox displayHeightTextBox = new TextBox();
+        private readonly TextBox displayDensityValueTextBox = new TextBox();
+        private readonly ComboBox displayDensityUnitComboBox = new ComboBox();
+        private readonly Button refreshDisplayInfoButton = new Button();
+        private readonly Button applyResolutionButton = new Button();
+        private readonly Button restoreResolutionButton = new Button();
+        private readonly Button applyDensityButton = new Button();
+        private readonly Button restoreDensityButton = new Button();
+        private readonly Button restoreDisplayAllButton = new Button();
+        private readonly ToolTip displayControlToolTip = new ToolTip();
+        private readonly System.Windows.Forms.Timer displayControlRefreshTimer = new System.Windows.Forms.Timer();
+
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
         private readonly object processLock = new object();
         private readonly string appDir;
@@ -154,6 +210,8 @@ namespace ApkInstallTool
         private int screenRecordCurrentTimeLimitSeconds;
         private DateTime screenRecordStartedAt;
         private ApkInfo currentApkInfo;
+        private DisplayControlInfo currentDisplayControlInfo;
+        private volatile bool isDisplayControlAutoRefreshing;
 
         private bool IsMediaCaptureRunning
         {
@@ -203,12 +261,14 @@ namespace ApkInstallTool
             tabControl.Dock = DockStyle.Fill;
             tabControl.TabPages.Add(installTab);
             tabControl.TabPages.Add(connectionTab);
+            tabControl.TabPages.Add(displayControlTab);
             tabControl.TabPages.Add(logRecordTab);
             tabControl.TabPages.Add(fileTransferTab);
             tabControl.TabPages.Add(screenshotTab);
             root.Controls.Add(tabControl, 0, 0);
             BuildInstallTab();
             BuildConnectionTab();
+            BuildDisplayControlTab();
             BuildLogRecordTab();
             BuildFileTransferTab();
             BuildScreenshotTab();
@@ -343,6 +403,123 @@ namespace ApkInstallTool
             hint.TextAlign = ContentAlignment.MiddleLeft;
             hint.ForeColor = Color.FromArgb(80, 80, 80);
             panel.Controls.Add(hint, 0, 2);
+        }
+
+        private void BuildDisplayControlTab()
+        {
+            displayControlTab.Padding = new Padding(10);
+            var panel = new TableLayoutPanel();
+            panel.Dock = DockStyle.Top;
+            panel.Height = 240;
+            panel.ColumnCount = 1;
+            panel.RowCount = 6;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            displayControlTab.Controls.Add(panel);
+
+            var topPanel = new TableLayoutPanel();
+            topPanel.Dock = DockStyle.Fill;
+            topPanel.ColumnCount = 4;
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
+            panel.Controls.Add(topPanel, 0, 0);
+            var title = new Label();
+            title.Text = "显示控制";
+            title.Dock = DockStyle.Fill;
+            title.TextAlign = ContentAlignment.MiddleLeft;
+            topPanel.Controls.Add(title, 0, 0);
+            refreshDisplayInfoButton.Text = "读取信息";
+            AddActionButton(topPanel, refreshDisplayInfoButton, 1);
+            restoreDisplayAllButton.Text = "全部恢复";
+            AddActionButton(topPanel, restoreDisplayAllButton, 2);
+
+            displayResolutionInfoLabel.Text = "屏幕分辨率：请选择一台 device 状态的设备后读取。";
+            displayResolutionInfoLabel.Dock = DockStyle.Fill;
+            displayResolutionInfoLabel.TextAlign = ContentAlignment.MiddleLeft;
+            displayResolutionInfoLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            displayResolutionInfoLabel.AutoEllipsis = true;
+            panel.Controls.Add(displayResolutionInfoLabel, 0, 1);
+
+            var resolutionPanel = new TableLayoutPanel();
+            resolutionPanel.Dock = DockStyle.Fill;
+            resolutionPanel.ColumnCount = 9;
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.Controls.Add(resolutionPanel, 0, 2);
+            AddLabel(resolutionPanel, "横向像素", 0);
+            displayWidthTextBox.Dock = DockStyle.Fill;
+            displayWidthTextBox.Margin = new Padding(0, 4, 8, 4);
+            resolutionPanel.Controls.Add(displayWidthTextBox, 1, 0);
+            AddLabel(resolutionPanel, "px", 2);
+            AddLabel(resolutionPanel, "纵向像素", 3);
+            displayHeightTextBox.Dock = DockStyle.Fill;
+            displayHeightTextBox.Margin = new Padding(0, 4, 8, 4);
+            resolutionPanel.Controls.Add(displayHeightTextBox, 4, 0);
+            AddLabel(resolutionPanel, "px", 5);
+            applyResolutionButton.Text = "修改";
+            restoreResolutionButton.Text = "恢复";
+            AddActionButton(resolutionPanel, applyResolutionButton, 6);
+            AddActionButton(resolutionPanel, restoreResolutionButton, 7);
+
+            displayDensityInfoLabel.Text = "显示密度：请选择一台 device 状态的设备后读取。";
+            displayDensityInfoLabel.Dock = DockStyle.Fill;
+            displayDensityInfoLabel.TextAlign = ContentAlignment.MiddleLeft;
+            displayDensityInfoLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            displayDensityInfoLabel.AutoEllipsis = true;
+            panel.Controls.Add(displayDensityInfoLabel, 0, 3);
+
+            var densityPanel = new TableLayoutPanel();
+            densityPanel.Dock = DockStyle.Fill;
+            densityPanel.ColumnCount = 7;
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 16));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.Controls.Add(densityPanel, 0, 4);
+            AddLabel(densityPanel, "密度/宽度", 0);
+            displayDensityValueTextBox.Dock = DockStyle.Fill;
+            displayDensityValueTextBox.Margin = new Padding(0, 4, 8, 4);
+            densityPanel.Controls.Add(displayDensityValueTextBox, 1, 0);
+            displayDensityUnitComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            displayDensityUnitComboBox.Dock = DockStyle.Fill;
+            displayDensityUnitComboBox.Margin = new Padding(0, 4, 8, 4);
+            displayDensityUnitComboBox.Items.AddRange(new object[] { "DPI", "dp" });
+            displayDensityUnitComboBox.SelectedIndex = 0;
+            densityPanel.Controls.Add(displayDensityUnitComboBox, 2, 0);
+            applyDensityButton.Text = "修改";
+            restoreDensityButton.Text = "恢复";
+            AddActionButton(densityPanel, applyDensityButton, 3);
+            AddActionButton(densityPanel, restoreDensityButton, 4);
+
+            displayControlStatusLabel.Text = "修改显示参数可能会短暂刷新设备画面；异常时可使用恢复按钮。";
+            displayControlStatusLabel.Dock = DockStyle.Fill;
+            displayControlStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            displayControlStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
+            displayControlStatusLabel.AutoEllipsis = true;
+            panel.Controls.Add(displayControlStatusLabel, 0, 5);
+
+            displayControlToolTip.SetToolTip(refreshDisplayInfoButton, "读取当前设备的 wm size 和 wm density。");
+            displayControlToolTip.SetToolTip(restoreDisplayAllButton, "依次执行 wm size reset 和 wm density reset。");
+            displayControlToolTip.SetToolTip(applyResolutionButton, "执行 wm size 宽x高，单位为 px。");
+            displayControlToolTip.SetToolTip(restoreResolutionButton, "执行 wm size reset。");
+            displayControlToolTip.SetToolTip(applyDensityButton, "DPI 模式直接设置 density；dp 模式按最小宽度换算 density。");
+            displayControlToolTip.SetToolTip(restoreDensityButton, "执行 wm density reset，同时恢复最小宽度表现。");
         }
 
         private void BuildLogRecordTab()
@@ -814,10 +991,11 @@ namespace ApkInstallTool
             uninstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             clearDataModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             startAppModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            deviceList.SelectedIndexChanged += delegate { BeginSyncAddressFromCurrentDevice(); };
-            deviceList.ItemCheck += delegate { BeginSyncAddressFromCurrentDevice(); };
-            deviceList.Click += delegate { BeginSyncAddressFromCurrentDevice(); };
-            deviceList.MouseUp += delegate { BeginSyncAddressFromCurrentDevice(); };
+            tabControl.SelectedIndexChanged += delegate { UpdateDisplayControlAutoRefreshState(); };
+            deviceList.SelectedIndexChanged += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); };
+            deviceList.ItemCheck += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); };
+            deviceList.Click += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); };
+            deviceList.MouseUp += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
             clearLogcatCacheButton.Click += delegate { ClearLogcatCache(); };
@@ -831,6 +1009,13 @@ namespace ApkInstallTool
             browseTransferFileMenuItem.Click += delegate { BrowseTransferFile(); };
             browseTransferFolderMenuItem.Click += delegate { BrowseTransferFolder(); };
             sendTransferButton.Click += delegate { StartFileTransfer(); };
+            refreshDisplayInfoButton.Click += delegate { RefreshDisplayControlInfo(); };
+            applyResolutionButton.Click += delegate { ApplyDisplayResolution(); };
+            restoreResolutionButton.Click += delegate { RestoreDisplayResolution(); };
+            applyDensityButton.Click += delegate { ApplyDisplayDensity(); };
+            restoreDensityButton.Click += delegate { RestoreDisplayDensity(); };
+            restoreDisplayAllButton.Click += delegate { RestoreAllDisplaySettings(); };
+            displayDensityUnitComboBox.SelectedIndexChanged += delegate { UpdateDisplayDensityValueForSelectedUnit(); };
             browseScreenshotOutputDirButton.Click += delegate { BrowseScreenshotOutputDir(); };
             takeScreenshotButton.Click += delegate { StartScreenshot(); };
             startScreenRecordButton.Click += delegate { StartScreenRecording(); };
@@ -841,6 +1026,8 @@ namespace ApkInstallTool
             logRecordStatusTimer.Tick += delegate { UpdateLogRecordStatus(); };
             screenRecordStatusTimer.Interval = 1000;
             screenRecordStatusTimer.Tick += delegate { UpdateScreenRecordStatus(); };
+            displayControlRefreshTimer.Interval = 3000;
+            displayControlRefreshTimer.Tick += delegate { BeginDisplayControlAutoRefresh(); };
             logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordTagTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordPackageTextBox.TextChanged += delegate { SaveConfig(); };
@@ -880,6 +1067,494 @@ namespace ApkInstallTool
             screenshotStatusLabel.Text = "请选择一台 device 状态的目标设备后截屏或录屏。";
             screenRecordTimeLimitCheckBox.Checked = false;
             UpdateScreenRecordOptionState();
+        }
+
+        private void RefreshDisplayControlInfo()
+        {
+            RunDisplayControlOperation("正在读取显示信息...", delegate(string adb, DeviceInfo device)
+            {
+                var info = ReadDisplayControlInfo(adb, device.Serial, true);
+                if (info == null) return;
+                BeginInvokeIfNeeded(delegate
+                {
+                    ApplyDisplayControlInfo(info);
+                    displayControlStatusLabel.Text = "显示信息已刷新。";
+                });
+                SetStatus("显示信息已刷新。");
+            });
+        }
+
+        private void UpdateDisplayControlAutoRefreshState()
+        {
+            if (tabControl.SelectedTab == displayControlTab)
+            {
+                displayControlRefreshTimer.Start();
+                BeginDisplayControlAutoRefresh();
+            }
+            else
+            {
+                displayControlRefreshTimer.Stop();
+            }
+        }
+
+        private void BeginDisplayControlAutoRefresh()
+        {
+            if (IsDisposed) return;
+            try { BeginInvoke(new Action(StartDisplayControlAutoRefresh)); } catch { }
+        }
+
+        private void StartDisplayControlAutoRefresh()
+        {
+            if (tabControl.SelectedTab != displayControlTab) return;
+            if (isDisplayControlAutoRefreshing || isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
+
+            DeviceInfo device;
+            if (!TryGetSingleCheckedDeviceForDisplayControl(out device))
+            {
+                displayControlStatusLabel.Text = "请选择一台 device 状态的目标设备，显示参数会自动刷新。";
+                return;
+            }
+
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                displayControlStatusLabel.Text = "未找到 adb.exe，无法自动读取显示信息。";
+                return;
+            }
+
+            var serial = device.Serial;
+            isDisplayControlAutoRefreshing = true;
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                string error;
+                var info = ReadDisplayControlInfoSilent(adb, serial, out error);
+                if (IsDisposed)
+                {
+                    isDisplayControlAutoRefreshing = false;
+                    return;
+                }
+                BeginInvokeIfNeeded(delegate
+                {
+                    try
+                    {
+                        DeviceInfo currentDevice;
+                        if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
+                        if (tabControl.SelectedTab != displayControlTab || !TryGetSingleCheckedDeviceForDisplayControl(out currentDevice) || !string.Equals(currentDevice.Serial, serial, StringComparison.Ordinal)) return;
+                        if (info == null)
+                        {
+                            displayControlStatusLabel.Text = string.IsNullOrWhiteSpace(error) ? "自动刷新显示信息失败。" : error;
+                            return;
+                        }
+                        ApplyDisplayControlInfo(info, true);
+                        displayControlStatusLabel.Text = "显示信息已自动刷新：" + DateTime.Now.ToString("HH:mm:ss");
+                    }
+                    finally
+                    {
+                        isDisplayControlAutoRefreshing = false;
+                    }
+                });
+            }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private void ApplyDisplayResolution()
+        {
+            int width;
+            int height;
+            if (!TryReadPositiveInt(displayWidthTextBox, "横向像素", out width)) return;
+            if (!TryReadPositiveInt(displayHeightTextBox, "纵向像素", out height)) return;
+
+            var target = width.ToString() + "x" + height.ToString();
+            RunDisplayControlOperation("正在修改屏幕分辨率...", delegate(string adb, DeviceInfo device)
+            {
+                if (!ExecuteDisplayControlCommand(adb, device.Serial, "修改屏幕分辨率", new[] { "wm", "size", target })) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, "屏幕分辨率已修改：" + target + " px");
+            });
+        }
+
+        private void RestoreDisplayResolution()
+        {
+            RunDisplayControlOperation("正在恢复屏幕分辨率...", delegate(string adb, DeviceInfo device)
+            {
+                if (!ExecuteDisplayControlCommand(adb, device.Serial, "恢复屏幕分辨率", new[] { "wm", "size", "reset" })) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, "屏幕分辨率已恢复默认。");
+            });
+        }
+
+        private void ApplyDisplayDensity()
+        {
+            int value;
+            var unit = GetSelectedDisplayDensityUnit();
+            if (!TryReadPositiveInt(displayDensityValueTextBox, unit == "dp" ? "最小宽度" : "显示密度", out value)) return;
+            if (unit == "DPI" && value < 72)
+            {
+                MessageBox.Show(this, "显示密度必须大于等于 72 dpi。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            RunDisplayControlOperation("正在修改显示密度...", delegate(string adb, DeviceInfo device)
+            {
+                var targetDensity = value;
+                var successMessage = "显示密度已修改：" + targetDensity + " dpi";
+                if (unit == "dp")
+                {
+                    var info = ReadDisplayControlInfo(adb, device.Serial, true);
+                    if (info == null || !info.HasCurrentSize)
+                    {
+                        FailDisplayControlOperation("无法读取当前分辨率，不能按最小宽度换算 density。");
+                        return;
+                    }
+                    targetDensity = CalculateDensityForSmallestWidth(info.CurrentWidth, info.CurrentHeight, value);
+                    if (targetDensity < 72)
+                    {
+                        FailDisplayControlOperation("最小宽度换算后的 density 为 " + targetDensity + " dpi，小于 Android 允许的 72 dpi。");
+                        return;
+                    }
+                    successMessage = "最小宽度已按 " + value + " dp 修改（density " + targetDensity + " dpi）。";
+                }
+
+                if (!ExecuteDisplayControlCommand(adb, device.Serial, "修改显示密度", new[] { "wm", "density", targetDensity.ToString() })) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, successMessage);
+            });
+        }
+
+        private void RestoreDisplayDensity()
+        {
+            RunDisplayControlOperation("正在恢复显示密度...", delegate(string adb, DeviceInfo device)
+            {
+                if (!ExecuteDisplayControlCommand(adb, device.Serial, "恢复显示密度", new[] { "wm", "density", "reset" })) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, "显示密度已恢复默认。");
+            });
+        }
+
+        private void RestoreAllDisplaySettings()
+        {
+            RunDisplayControlOperation("正在恢复全部显示设置...", delegate(string adb, DeviceInfo device)
+            {
+                var sizeOk = ExecuteDisplayControlCommand(adb, device.Serial, "恢复屏幕分辨率", new[] { "wm", "size", "reset" });
+                if (cancelRequested) return;
+                var densityOk = ExecuteDisplayControlCommand(adb, device.Serial, "恢复显示密度", new[] { "wm", "density", "reset" });
+                var message = sizeOk && densityOk ? "显示设置已全部恢复默认。" : "显示设置恢复未全部成功，请查看日志。";
+                RefreshDisplayInfoAfterChange(adb, device.Serial, message);
+            });
+        }
+
+        private void RunDisplayControlOperation(string busyText, Action<string, DeviceInfo> operation)
+        {
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
+            var device = GetSingleCheckedDeviceForDisplayControl();
+            if (device == null) return;
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            cancelRequested = false;
+            isDeviceCommandRunning = true;
+            SetDeviceCommandUi(true);
+            displayControlStatusLabel.Text = busyText;
+            statusLabel.Text = busyText;
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                try
+                {
+                    AddLogLine(busyText + " " + device.Serial);
+                    operation(adb, device);
+                }
+                finally
+                {
+                    isDeviceCommandRunning = false;
+                    cancelRequested = false;
+                    BeginInvokeIfNeeded(delegate { SetDeviceCommandUi(false); });
+                }
+            }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private DeviceInfo GetSingleCheckedDeviceForDisplayControl()
+        {
+            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
+            if (checkedItems.Count == 0)
+            {
+                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            if (checkedItems.Count > 1)
+            {
+                MessageBox.Show(this, "显示控制一次只能选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            DeviceInfo device;
+            if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
+            {
+                MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            return device;
+        }
+
+        private bool TryGetSingleCheckedDeviceForDisplayControl(out DeviceInfo device)
+        {
+            device = null;
+            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
+            if (checkedItems.Count != 1) return false;
+            return deviceMap.TryGetValue(checkedItems[0], out device) && device.State == "device";
+        }
+
+        private DisplayControlInfo ReadDisplayControlInfo(string adb, string serial, bool cancellable)
+        {
+            var sizeResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "wm", "size" }, cancellable);
+            if (sizeResult.Canceled)
+            {
+                FailDisplayControlOperation("显示信息读取已中止。");
+                return null;
+            }
+            if (sizeResult.ExitCode != 0)
+            {
+                FailDisplayControlOperation("读取屏幕分辨率失败：" + HumanizeAdbOutput(sizeResult.Output));
+                return null;
+            }
+
+            var densityResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "wm", "density" }, cancellable);
+            if (densityResult.Canceled)
+            {
+                FailDisplayControlOperation("显示信息读取已中止。");
+                return null;
+            }
+            if (densityResult.ExitCode != 0)
+            {
+                FailDisplayControlOperation("读取显示密度失败：" + HumanizeAdbOutput(densityResult.Output));
+                return null;
+            }
+
+            var info = new DisplayControlInfo();
+            var hasSize = TryParseDisplaySizeOutput(sizeResult.Output, info);
+            var hasDensity = TryParseDisplayDensityOutput(densityResult.Output, info);
+            if (!hasSize && !hasDensity)
+            {
+                FailDisplayControlOperation("无法解析设备显示信息。");
+                return null;
+            }
+            if (!hasSize) AddLogLine("无法解析 wm size 输出：" + FirstUsefulLine(sizeResult.Output));
+            if (!hasDensity) AddLogLine("无法解析 wm density 输出：" + FirstUsefulLine(densityResult.Output));
+            return info;
+        }
+
+        private DisplayControlInfo ReadDisplayControlInfoSilent(string adb, string serial, out string error)
+        {
+            error = "";
+            var sizeResult = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "wm", "size" });
+            if (sizeResult.ExitCode != 0)
+            {
+                error = "自动读取屏幕分辨率失败：" + HumanizeAdbOutput(sizeResult.Output);
+                return null;
+            }
+
+            var densityResult = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "wm", "density" });
+            if (densityResult.ExitCode != 0)
+            {
+                error = "自动读取显示密度失败：" + HumanizeAdbOutput(densityResult.Output);
+                return null;
+            }
+
+            var info = new DisplayControlInfo();
+            var hasSize = TryParseDisplaySizeOutput(sizeResult.Output, info);
+            var hasDensity = TryParseDisplayDensityOutput(densityResult.Output, info);
+            if (!hasSize && !hasDensity)
+            {
+                error = "自动读取到的显示信息无法解析。";
+                return null;
+            }
+            return info;
+        }
+
+        private bool ExecuteDisplayControlCommand(string adb, string serial, string title, string[] shellArgs)
+        {
+            var args = new List<string> { "-s", serial, "shell" };
+            args.AddRange(shellArgs);
+            var result = InvokeProcess(adb, args.ToArray(), true);
+            if (result.Canceled)
+            {
+                FailDisplayControlOperation(title + "已中止。");
+                return false;
+            }
+            if (result.ExitCode == 0) return true;
+            FailDisplayControlOperation(title + "失败：" + HumanizeAdbOutput(result.Output));
+            return false;
+        }
+
+        private void RefreshDisplayInfoAfterChange(string adb, string serial, string message)
+        {
+            if (cancelRequested) return;
+            var info = ReadDisplayControlInfo(adb, serial, true);
+            BeginInvokeIfNeeded(delegate
+            {
+                if (info != null) ApplyDisplayControlInfo(info);
+                displayControlStatusLabel.Text = info == null ? message + " 但刷新显示信息失败。" : message;
+            });
+            SetStatus(info == null ? message + " 但刷新失败。" : message);
+            AddLogLine(message);
+        }
+
+        private void ApplyDisplayControlInfo(DisplayControlInfo info)
+        {
+            ApplyDisplayControlInfo(info, false);
+        }
+
+        private void ApplyDisplayControlInfo(DisplayControlInfo info, bool preserveFocusedInputs)
+        {
+            currentDisplayControlInfo = info;
+            if (info.HasCurrentSize)
+            {
+                displayResolutionInfoLabel.Text = "屏幕分辨率：当前 " + FormatDisplaySize(info.CurrentWidth, info.CurrentHeight) + " px" + FormatDisplaySizeSource(info);
+                if (!preserveFocusedInputs || !displayWidthTextBox.Focused) displayWidthTextBox.Text = info.CurrentWidth.ToString();
+                if (!preserveFocusedInputs || !displayHeightTextBox.Focused) displayHeightTextBox.Text = info.CurrentHeight.ToString();
+            }
+            else
+            {
+                displayResolutionInfoLabel.Text = "屏幕分辨率：N/A";
+            }
+
+            if (info.HasCurrentDensity)
+            {
+                var smallestWidth = info.HasCurrentSize ? CalculateSmallestWidthDp(info.CurrentWidth, info.CurrentHeight, info.CurrentDensity) : 0;
+                displayDensityInfoLabel.Text = "显示密度：当前 " + info.CurrentDensity + " dpi" + (smallestWidth > 0 ? "，最小宽度 " + smallestWidth + " dp" : "") + FormatDisplayDensitySource(info);
+                UpdateDisplayDensityValueForSelectedUnit(preserveFocusedInputs);
+            }
+            else
+            {
+                displayDensityInfoLabel.Text = "显示密度：N/A";
+            }
+        }
+
+        private void UpdateDisplayDensityValueForSelectedUnit()
+        {
+            UpdateDisplayDensityValueForSelectedUnit(false);
+        }
+
+        private void UpdateDisplayDensityValueForSelectedUnit(bool preserveFocusedInput)
+        {
+            if (currentDisplayControlInfo == null || !currentDisplayControlInfo.HasCurrentDensity) return;
+            if (preserveFocusedInput && displayDensityValueTextBox.Focused) return;
+            if (GetSelectedDisplayDensityUnit() == "dp")
+            {
+                if (!currentDisplayControlInfo.HasCurrentSize) return;
+                displayDensityValueTextBox.Text = CalculateSmallestWidthDp(currentDisplayControlInfo.CurrentWidth, currentDisplayControlInfo.CurrentHeight, currentDisplayControlInfo.CurrentDensity).ToString();
+            }
+            else
+            {
+                displayDensityValueTextBox.Text = currentDisplayControlInfo.CurrentDensity.ToString();
+            }
+        }
+
+        private void FailDisplayControlOperation(string message)
+        {
+            AddLogLine(message);
+            BeginInvokeIfNeeded(delegate { displayControlStatusLabel.Text = message; });
+            SetStatus(message);
+        }
+
+        private bool TryReadPositiveInt(TextBox textBox, string fieldName, out int value)
+        {
+            value = 0;
+            var text = textBox.Text.Trim();
+            if (!int.TryParse(text, out value) || value <= 0)
+            {
+                MessageBox.Show(this, fieldName + "必须填写正整数。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+            return true;
+        }
+
+        private string GetSelectedDisplayDensityUnit()
+        {
+            var item = displayDensityUnitComboBox.SelectedItem as string;
+            return string.Equals(item, "dp", StringComparison.OrdinalIgnoreCase) ? "dp" : "DPI";
+        }
+
+        private static bool TryParseDisplaySizeOutput(string output, DisplayControlInfo info)
+        {
+            if (info == null) return false;
+            var physical = Regex.Match(output ?? "", @"Physical\s+size:\s*(?<width>\d+)\s*x\s*(?<height>\d+)", RegexOptions.IgnoreCase);
+            if (physical.Success)
+            {
+                info.PhysicalWidth = int.Parse(physical.Groups["width"].Value);
+                info.PhysicalHeight = int.Parse(physical.Groups["height"].Value);
+                info.HasPhysicalSize = true;
+            }
+
+            var forced = Regex.Match(output ?? "", @"Override\s+size:\s*(?<width>\d+)\s*x\s*(?<height>\d+)", RegexOptions.IgnoreCase);
+            if (forced.Success)
+            {
+                info.OverrideWidth = int.Parse(forced.Groups["width"].Value);
+                info.OverrideHeight = int.Parse(forced.Groups["height"].Value);
+                info.HasOverrideSize = true;
+            }
+            return info.HasCurrentSize;
+        }
+
+        private static bool TryParseDisplayDensityOutput(string output, DisplayControlInfo info)
+        {
+            if (info == null) return false;
+            var physical = Regex.Match(output ?? "", @"Physical\s+density:\s*(?<density>\d+)", RegexOptions.IgnoreCase);
+            if (physical.Success)
+            {
+                info.PhysicalDensity = int.Parse(physical.Groups["density"].Value);
+                info.HasPhysicalDensity = true;
+            }
+
+            var forced = Regex.Match(output ?? "", @"Override\s+density:\s*(?<density>\d+)", RegexOptions.IgnoreCase);
+            if (forced.Success)
+            {
+                info.OverrideDensity = int.Parse(forced.Groups["density"].Value);
+                info.HasOverrideDensity = true;
+            }
+            return info.HasCurrentDensity;
+        }
+
+        private static int CalculateSmallestWidthDp(int width, int height, int density)
+        {
+            if (width <= 0 || height <= 0 || density <= 0) return 0;
+            return (int)Math.Round(Math.Min(width, height) * 160.0 / density);
+        }
+
+        private static int CalculateDensityForSmallestWidth(int width, int height, int smallestWidthDp)
+        {
+            if (width <= 0 || height <= 0 || smallestWidthDp <= 0) return 0;
+            return (int)Math.Round(Math.Min(width, height) * 160.0 / smallestWidthDp);
+        }
+
+        private static string FormatDisplaySize(int width, int height)
+        {
+            return width.ToString() + "x" + height.ToString();
+        }
+
+        private static string FormatDisplaySizeSource(DisplayControlInfo info)
+        {
+            if (info == null) return "";
+            if (info.HasPhysicalSize && info.HasOverrideSize)
+            {
+                return "（物理 " + FormatDisplaySize(info.PhysicalWidth, info.PhysicalHeight) + " px，覆盖 " + FormatDisplaySize(info.OverrideWidth, info.OverrideHeight) + " px）";
+            }
+            if (info.HasPhysicalSize) return "（物理值）";
+            if (info.HasOverrideSize) return "（覆盖值）";
+            return "";
+        }
+
+        private static string FormatDisplayDensitySource(DisplayControlInfo info)
+        {
+            if (info == null) return "";
+            if (info.HasPhysicalDensity && info.HasOverrideDensity)
+            {
+                return "（物理 " + info.PhysicalDensity + " dpi，覆盖 " + info.OverrideDensity + " dpi）";
+            }
+            if (info.HasPhysicalDensity) return "（物理值）";
+            if (info.HasOverrideDensity) return "（覆盖值）";
+            return "";
         }
 
         private void BrowseLogRecordFile()
@@ -1349,6 +2024,20 @@ namespace ApkInstallTool
             screenRecordBitRateNumeric.Enabled = !busy;
         }
 
+        private void SetDisplayControlControlsEnabled(bool enabled)
+        {
+            refreshDisplayInfoButton.Enabled = enabled;
+            restoreDisplayAllButton.Enabled = enabled;
+            displayWidthTextBox.Enabled = enabled;
+            displayHeightTextBox.Enabled = enabled;
+            applyResolutionButton.Enabled = enabled;
+            restoreResolutionButton.Enabled = enabled;
+            displayDensityValueTextBox.Enabled = enabled;
+            displayDensityUnitComboBox.Enabled = enabled;
+            applyDensityButton.Enabled = enabled;
+            restoreDensityButton.Enabled = enabled;
+        }
+
         private void SetLogcatUi(bool running)
         {
             var busy = running || isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning;
@@ -1389,6 +2078,7 @@ namespace ApkInstallTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDisplayControlControlsEnabled(!busy);
             refreshButton.Enabled = !busy;
             deviceList.Enabled = !busy;
         }
@@ -1941,6 +2631,7 @@ namespace ApkInstallTool
             stopScreenRecordButton.Enabled = running && !screenRecordStopRequested;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDisplayControlControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenshotRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             if (running) UpdateScreenRecordStatus();
@@ -2399,6 +3090,7 @@ namespace ApkInstallTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDisplayControlControlsEnabled(!busy);
             deviceList.Enabled = !busy;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
         }
@@ -3076,6 +3768,7 @@ namespace ApkInstallTool
                 deviceList.Items.Add(device.Label, device.State == "device");
             }
             statusLabel.Text = "检测到 " + devices.Count + " 台设备，可用 " + devices.Count(d => d.State == "device") + " 台。";
+            BeginDisplayControlAutoRefresh();
         }
 
         private List<DeviceInfo> GetConnectedDevices(string adb)
@@ -3474,6 +4167,7 @@ namespace ApkInstallTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDisplayControlControlsEnabled(!busy);
             cancelButton.Enabled = executing || isDeviceCommandRunning || IsMediaCaptureRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             statusLabel.Text = executing ? "正在执行..." : statusLabel.Text;
@@ -3522,6 +4216,7 @@ namespace ApkInstallTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDisplayControlControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenRecordRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             if (running)
@@ -3533,6 +4228,7 @@ namespace ApkInstallTool
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
+            displayControlRefreshTimer.Stop();
             if (isScreenRecordRunning)
             {
                 e.Cancel = true;
@@ -3573,6 +4269,7 @@ namespace ApkInstallTool
         private string FindAdb()
         {
             var candidates = new List<string>();
+            candidates.Add(Path.Combine(appDir, "adb.exe"));
             candidates.Add("adb.exe");
             var androidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
             var androidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");

@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("APK安装工具")]
-[assembly: AssemblyDescription("用于选择 APK 并对多台 Android 设备执行安装、卸载、清空数据、启动应用、日志录制、文件传输、截屏、中止和无线连接操作")]
+[assembly: AssemblyDescription("用于选择 APK 并对多台 Android 设备执行安装、卸载、清空数据、启动应用、日志录制、文件传输、截屏、显示控制、中止和无线连接操作")]
 [assembly: AssemblyCompany("Local Tool")]
 [assembly: AssemblyProduct("APK安装工具")]
 [assembly: AssemblyCopyright("")]
