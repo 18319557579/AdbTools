@@ -1617,14 +1617,16 @@ namespace ApkInstallTool
         private void StartDisplayControlAutoRefresh()
         {
             if (tabControl.SelectedTab != displayControlTab) return;
-            if (isDisplayControlAutoRefreshing || isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
 
             DeviceInfo device;
             if (!TryGetSingleCheckedDeviceForDisplayControl(out device))
             {
+                ClearDisplayControlInfo();
                 displayControlStatusLabel.Text = "请选择一台 device 状态的目标设备，显示参数会自动刷新。";
                 return;
             }
+
+            if (isDisplayControlAutoRefreshing || isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
 
             var adb = FindAdb();
             if (adb == null)
@@ -1650,7 +1652,14 @@ namespace ApkInstallTool
                     {
                         DeviceInfo currentDevice;
                         if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
-                        if (tabControl.SelectedTab != displayControlTab || !TryGetSingleCheckedDeviceForDisplayControl(out currentDevice) || !string.Equals(currentDevice.Serial, serial, StringComparison.Ordinal)) return;
+                        if (tabControl.SelectedTab != displayControlTab) return;
+                        if (!TryGetSingleCheckedDeviceForDisplayControl(out currentDevice))
+                        {
+                            ClearDisplayControlInfo();
+                            displayControlStatusLabel.Text = "请选择一台 device 状态的目标设备，显示参数会自动刷新。";
+                            return;
+                        }
+                        if (!string.Equals(currentDevice.Serial, serial, StringComparison.Ordinal)) return;
                         if (info == null)
                         {
                             displayControlStatusLabel.Text = string.IsNullOrWhiteSpace(error) ? "自动刷新显示信息失败。" : error;
@@ -1671,6 +1680,8 @@ namespace ApkInstallTool
 
         private void ApplyDisplayResolution()
         {
+            if (!EnsureSingleCheckedDeviceForDisplayControl()) return;
+
             int width;
             int height;
             if (!TryReadPositiveInt(displayWidthTextBox, "横向像素", out width)) return;
@@ -1695,6 +1706,8 @@ namespace ApkInstallTool
 
         private void ApplyDisplayDensity()
         {
+            if (!EnsureSingleCheckedDeviceForDisplayControl()) return;
+
             int value;
             var unit = GetSelectedDisplayDensityUnit();
             if (!TryReadPositiveInt(displayDensityValueTextBox, unit == "dp" ? "最小宽度" : "显示密度", out value)) return;
@@ -1791,21 +1804,31 @@ namespace ApkInstallTool
             var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
             if (checkedItems.Count == 0)
             {
+                ClearDisplayControlInfo();
                 MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             if (checkedItems.Count > 1)
             {
+                ClearDisplayControlInfo();
                 MessageBox.Show(this, "显示控制一次只能选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             DeviceInfo device;
             if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
             {
+                ClearDisplayControlInfo();
                 MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             return device;
+        }
+
+        private bool EnsureSingleCheckedDeviceForDisplayControl()
+        {
+            DeviceInfo device;
+            if (TryGetSingleCheckedDeviceForDisplayControl(out device)) return true;
+            return GetSingleCheckedDeviceForDisplayControl() != null;
         }
 
         private bool TryGetSingleCheckedDeviceForDisplayControl(out DeviceInfo device)
@@ -1928,6 +1951,8 @@ namespace ApkInstallTool
             else
             {
                 displayResolutionInfoLabel.Text = "屏幕分辨率：N/A";
+                if (!preserveFocusedInputs || !displayWidthTextBox.Focused) displayWidthTextBox.Clear();
+                if (!preserveFocusedInputs || !displayHeightTextBox.Focused) displayHeightTextBox.Clear();
             }
 
             if (info.HasCurrentDensity)
@@ -1939,7 +1964,18 @@ namespace ApkInstallTool
             else
             {
                 displayDensityInfoLabel.Text = "显示密度：N/A";
+                if (!preserveFocusedInputs || !displayDensityValueTextBox.Focused) displayDensityValueTextBox.Clear();
             }
+        }
+
+        private void ClearDisplayControlInfo()
+        {
+            currentDisplayControlInfo = null;
+            displayResolutionInfoLabel.Text = "屏幕分辨率：请选择一台 device 状态的设备后读取。";
+            displayDensityInfoLabel.Text = "显示密度：请选择一台 device 状态的设备后读取。";
+            displayWidthTextBox.Clear();
+            displayHeightTextBox.Clear();
+            displayDensityValueTextBox.Clear();
         }
 
         private void UpdateDisplayDensityValueForSelectedUnit()
@@ -1949,11 +1985,19 @@ namespace ApkInstallTool
 
         private void UpdateDisplayDensityValueForSelectedUnit(bool preserveFocusedInput)
         {
-            if (currentDisplayControlInfo == null || !currentDisplayControlInfo.HasCurrentDensity) return;
+            if (currentDisplayControlInfo == null || !currentDisplayControlInfo.HasCurrentDensity)
+            {
+                if (!preserveFocusedInput || !displayDensityValueTextBox.Focused) displayDensityValueTextBox.Clear();
+                return;
+            }
             if (preserveFocusedInput && displayDensityValueTextBox.Focused) return;
             if (GetSelectedDisplayDensityUnit() == "dp")
             {
-                if (!currentDisplayControlInfo.HasCurrentSize) return;
+                if (!currentDisplayControlInfo.HasCurrentSize)
+                {
+                    displayDensityValueTextBox.Clear();
+                    return;
+                }
                 displayDensityValueTextBox.Text = CalculateSmallestWidthDp(currentDisplayControlInfo.CurrentWidth, currentDisplayControlInfo.CurrentHeight, currentDisplayControlInfo.CurrentDensity).ToString();
             }
             else
