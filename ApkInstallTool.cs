@@ -88,8 +88,7 @@ namespace ApkInstallTool
         private readonly SplitContainer mainSplitContainer = new SplitContainer();
         private readonly SplitContainer lowerSplitContainer = new SplitContainer();
         private readonly TabPage installTab = new TabPage("APK 安装");
-        private readonly TabPage connectionTab = new TabPage("设备连接");
-        private readonly TabPage deviceInfoTab = new TabPage("设备信息");
+        private readonly TabPage deviceInfoTab = new TabPage("设备概览");
         private readonly TabPage displayControlTab = new TabPage("显示控制");
         private readonly TabPage logRecordTab = new TabPage("日志录制");
         private readonly TabPage fileTransferTab = new TabPage("文件传输");
@@ -114,9 +113,6 @@ namespace ApkInstallTool
         private readonly Label statusLabel = new Label();
         private readonly TextBox logBox = new TextBox();
 
-        private readonly Button refreshDeviceInfoButton = new Button();
-        private readonly Button copyDeviceInfoButton = new Button();
-        private readonly Label deviceInfoStatusLabel = new Label();
         private readonly TextBox deviceInfoTextBox = new TextBox();
         private readonly ToolTip deviceInfoToolTip = new ToolTip();
 
@@ -280,7 +276,6 @@ namespace ApkInstallTool
 
             tabControl.Dock = DockStyle.Fill;
             tabControl.TabPages.Add(installTab);
-            tabControl.TabPages.Add(connectionTab);
             tabControl.TabPages.Add(deviceInfoTab);
             tabControl.TabPages.Add(displayControlTab);
             tabControl.TabPages.Add(logRecordTab);
@@ -296,7 +291,6 @@ namespace ApkInstallTool
             mainSplitContainer.Panel2.Controls.Add(lowerSplitContainer);
 
             BuildInstallTab();
-            BuildConnectionTab();
             BuildDeviceInfoTab();
             BuildDisplayControlTab();
             BuildLogRecordTab();
@@ -386,23 +380,17 @@ namespace ApkInstallTool
             panel.Controls.Add(button);
         }
 
-        private void BuildConnectionTab()
+        private void BuildDeviceInfoTab()
         {
-            connectionTab.Padding = new Padding(10);
+            deviceInfoTab.Padding = new Padding(10);
             var panel = new TableLayoutPanel();
-            panel.Dock = DockStyle.Top;
-            panel.Height = 118;
+            panel.Dock = DockStyle.Fill;
             panel.ColumnCount = 1;
-            panel.RowCount = 3;
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            connectionTab.Controls.Add(panel);
-            var title = new Label();
-            title.Text = "设备连接";
-            title.Dock = DockStyle.Fill;
-            title.TextAlign = ContentAlignment.MiddleLeft;
-            panel.Controls.Add(title, 0, 0);
+            panel.RowCount = 2;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            deviceInfoTab.Controls.Add(panel);
+
             var connectPanel = new TableLayoutPanel();
             connectPanel.Dock = DockStyle.Fill;
             connectPanel.ColumnCount = 4;
@@ -410,7 +398,8 @@ namespace ApkInstallTool
             connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
             connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
-            panel.Controls.Add(connectPanel, 0, 1);
+            panel.Controls.Add(connectPanel, 0, 0);
+
             var connectLabel = new Label();
             connectLabel.Text = "设备地址";
             connectLabel.Dock = DockStyle.Fill;
@@ -427,53 +416,6 @@ namespace ApkInstallTool
             disconnectButton.Dock = DockStyle.Fill;
             disconnectButton.Margin = new Padding(0, 3, 0, 3);
             connectPanel.Controls.Add(disconnectButton, 3, 0);
-            var hint = new Label();
-            hint.Text = "单击下方目标设备列表会同步设备 ID；无线连接可输入 IP:端口，例如 192.168.1.100:5555。";
-            hint.Dock = DockStyle.Fill;
-            hint.TextAlign = ContentAlignment.MiddleLeft;
-            hint.ForeColor = Color.FromArgb(80, 80, 80);
-            panel.Controls.Add(hint, 0, 2);
-        }
-
-        private void BuildDeviceInfoTab()
-        {
-            deviceInfoTab.Padding = new Padding(10);
-            var panel = new TableLayoutPanel();
-            panel.Dock = DockStyle.Fill;
-            panel.ColumnCount = 1;
-            panel.RowCount = 3;
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            deviceInfoTab.Controls.Add(panel);
-
-            var topPanel = new TableLayoutPanel();
-            topPanel.Dock = DockStyle.Fill;
-            topPanel.ColumnCount = 4;
-            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
-            panel.Controls.Add(topPanel, 0, 0);
-
-            var title = new Label();
-            title.Text = "设备信息";
-            title.Dock = DockStyle.Fill;
-            title.TextAlign = ContentAlignment.MiddleLeft;
-            topPanel.Controls.Add(title, 0, 0);
-
-            refreshDeviceInfoButton.Text = "读取信息";
-            AddActionButton(topPanel, refreshDeviceInfoButton, 1);
-            copyDeviceInfoButton.Text = "复制信息";
-            copyDeviceInfoButton.Enabled = false;
-            AddActionButton(topPanel, copyDeviceInfoButton, 2);
-
-            deviceInfoStatusLabel.Text = "请选择一台 device 状态的目标设备后读取。";
-            deviceInfoStatusLabel.Dock = DockStyle.Fill;
-            deviceInfoStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
-            deviceInfoStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
-            deviceInfoStatusLabel.AutoEllipsis = true;
-            panel.Controls.Add(deviceInfoStatusLabel, 0, 1);
 
             deviceInfoTextBox.Dock = DockStyle.Fill;
             deviceInfoTextBox.Multiline = true;
@@ -481,11 +423,10 @@ namespace ApkInstallTool
             deviceInfoTextBox.WordWrap = false;
             deviceInfoTextBox.ReadOnly = true;
             deviceInfoTextBox.Font = new Font("Consolas", 9F);
-            deviceInfoTextBox.Text = "请在下方目标设备列表中只勾选一台 device 状态设备，然后点击“读取信息”。";
-            panel.Controls.Add(deviceInfoTextBox, 0, 2);
+            deviceInfoTextBox.Text = "请点击下方目标设备列表中的一台 device 状态设备。";
+            panel.Controls.Add(deviceInfoTextBox, 0, 1);
 
-            deviceInfoToolTip.SetToolTip(refreshDeviceInfoButton, "读取当前设备的关键系统、硬件、电池、存储、网络和安全信息。");
-            deviceInfoToolTip.SetToolTip(copyDeviceInfoButton, "复制当前设备信息文本。");
+            deviceInfoToolTip.SetToolTip(connectAddressTextBox, "可输入 IP:端口，例如 192.168.1.100:5555；点击设备列表会同步设备 ID。");
         }
 
         private void BuildDisplayControlTab()
@@ -1083,13 +1024,11 @@ namespace ApkInstallTool
             uninstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             clearDataModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             startAppModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            tabControl.SelectedIndexChanged += delegate { UpdateDisplayControlAutoRefreshState(); BeginDeviceInfoAutoRefresh(); };
-            deviceList.SelectedIndexChanged += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); BeginDeviceInfoAutoRefresh(); };
-            deviceList.ItemCheck += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); BeginDeviceInfoAutoRefresh(); };
-            deviceList.Click += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); BeginDeviceInfoAutoRefresh(); };
-            deviceList.MouseUp += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); BeginDeviceInfoAutoRefresh(); };
-            refreshDeviceInfoButton.Click += delegate { RefreshDeviceInfo(); };
-            copyDeviceInfoButton.Click += delegate { CopyDeviceInfo(); };
+            tabControl.SelectedIndexChanged += delegate { UpdateDisplayControlAutoRefreshState(); BeginDeviceInfoAutoRefresh(false); };
+            deviceList.SelectedIndexChanged += delegate { OnDeviceListSelectionChanged(); };
+            deviceList.ItemCheck += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); };
+            deviceList.Click += delegate { BeginSyncAddressFromCurrentDevice(); };
+            deviceList.MouseUp += delegate(object sender, MouseEventArgs e) { OnDeviceListMouseUp(e); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
             clearLogcatCacheButton.Click += delegate { ClearLogcatCache(); };
@@ -1235,18 +1174,18 @@ namespace ApkInstallTool
             UpdateScreenRecordOptionState();
         }
 
-        private void RefreshDeviceInfo()
-        {
-            StartDeviceInfoRefresh(false);
-        }
-
         private void BeginDeviceInfoAutoRefresh()
         {
-            if (IsDisposed) return;
-            try { BeginInvoke(new Action(delegate { StartDeviceInfoRefresh(true); })); } catch { }
+            BeginDeviceInfoAutoRefresh(false);
         }
 
-        private void StartDeviceInfoRefresh(bool automatic)
+        private void BeginDeviceInfoAutoRefresh(bool force)
+        {
+            if (IsDisposed) return;
+            try { BeginInvoke(new Action(delegate { StartDeviceInfoRefresh(true, force); })); } catch { }
+        }
+
+        private void StartDeviceInfoRefresh(bool automatic, bool force)
         {
             if (automatic && tabControl.SelectedTab != deviceInfoTab) return;
             if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
@@ -1254,16 +1193,16 @@ namespace ApkInstallTool
             DeviceInfo device;
             if (automatic)
             {
-                if (!TryGetSingleCheckedDeviceForDeviceInfo(out device))
+                if (!TryGetSelectedDeviceForDeviceInfo(out device))
                 {
-                    deviceInfoStatusLabel.Text = "请在目标设备列表中只勾选一台 device 状态设备。";
+                    if (deviceList.SelectedItem != null) statusLabel.Text = "请选择状态为 device 的设备。";
                     return;
                 }
-                if (string.Equals(currentDeviceInfoSerial, device.Serial, StringComparison.Ordinal) && deviceInfoTextBox.TextLength > 0) return;
+                if (!force && string.Equals(currentDeviceInfoSerial, device.Serial, StringComparison.Ordinal) && deviceInfoTextBox.TextLength > 0) return;
             }
             else
             {
-                device = GetSingleCheckedDeviceForDeviceInfo();
+                device = GetSelectedDeviceForDeviceInfo();
                 if (device == null) return;
             }
 
@@ -1271,7 +1210,7 @@ namespace ApkInstallTool
             if (adb == null)
             {
                 var message = "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。";
-                if (automatic) deviceInfoStatusLabel.Text = message;
+                if (automatic) statusLabel.Text = message;
                 else MessageBox.Show(this, message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
@@ -1279,7 +1218,6 @@ namespace ApkInstallTool
             cancelRequested = false;
             isDeviceCommandRunning = true;
             SetDeviceCommandUi(true);
-            deviceInfoStatusLabel.Text = "正在读取设备信息...";
             statusLabel.Text = "正在读取设备信息...";
             AddLogLine("读取设备信息：" + device.Serial);
             var serial = device.Serial;
@@ -1297,11 +1235,10 @@ namespace ApkInstallTool
                         if (automatic)
                         {
                             DeviceInfo currentDevice;
-                            if (tabControl.SelectedTab != deviceInfoTab || !TryGetSingleCheckedDeviceForDeviceInfo(out currentDevice) || !string.Equals(currentDevice.Serial, serial, StringComparison.Ordinal)) return;
+                            if (tabControl.SelectedTab != deviceInfoTab || !TryGetSelectedDeviceForDeviceInfo(out currentDevice) || !string.Equals(currentDevice.Serial, serial, StringComparison.Ordinal)) return;
                         }
                         if (canceled)
                         {
-                            deviceInfoStatusLabel.Text = "设备信息读取已中止。";
                             statusLabel.Text = "设备信息读取已中止。";
                             return;
                         }
@@ -1309,22 +1246,19 @@ namespace ApkInstallTool
                         {
                             deviceInfoTextBox.Text = report;
                             currentDeviceInfoSerial = serial;
-                            deviceInfoStatusLabel.Text = "设备信息已刷新：" + DateTime.Now.ToString("HH:mm:ss") + "，" + deviceLabel;
                             statusLabel.Text = "设备信息已刷新。";
                         }
                         else
                         {
                             var message = string.IsNullOrWhiteSpace(error) ? "设备信息读取失败。" : error;
-                            deviceInfoStatusLabel.Text = message;
                             statusLabel.Text = message;
                         }
                     });
                 }
-                catch (Exception ex)
+                catch
                 {
                     BeginInvokeIfNeeded(delegate
                     {
-                        deviceInfoStatusLabel.Text = "设备信息读取失败：" + ex.Message;
                         statusLabel.Text = "设备信息读取失败。";
                     });
                 }
@@ -1339,21 +1273,16 @@ namespace ApkInstallTool
             thread.Start();
         }
 
-        private DeviceInfo GetSingleCheckedDeviceForDeviceInfo()
+        private DeviceInfo GetSelectedDeviceForDeviceInfo()
         {
-            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
-            if (checkedItems.Count == 0)
+            var label = GetDeviceInfoTargetLabel();
+            if (string.IsNullOrWhiteSpace(label))
             {
                 MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
-            if (checkedItems.Count > 1)
-            {
-                MessageBox.Show(this, "设备信息一次只能读取一台设备，请只勾选一台。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return null;
-            }
             DeviceInfo device;
-            if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
+            if (!deviceMap.TryGetValue(label, out device) || device.State != "device")
             {
                 MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
@@ -1361,27 +1290,20 @@ namespace ApkInstallTool
             return device;
         }
 
-        private bool TryGetSingleCheckedDeviceForDeviceInfo(out DeviceInfo device)
+        private bool TryGetSelectedDeviceForDeviceInfo(out DeviceInfo device)
         {
             device = null;
-            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
-            if (checkedItems.Count != 1) return false;
-            return deviceMap.TryGetValue(checkedItems[0], out device) && device.State == "device";
+            var label = GetDeviceInfoTargetLabel();
+            if (string.IsNullOrWhiteSpace(label)) return false;
+            return deviceMap.TryGetValue(label, out device) && device.State == "device";
         }
 
-        private void CopyDeviceInfo()
+        private string GetDeviceInfoTargetLabel()
         {
-            var text = deviceInfoTextBox.Text;
-            if (string.IsNullOrWhiteSpace(text)) return;
-            try
-            {
-                Clipboard.SetText(text);
-                deviceInfoStatusLabel.Text = "设备信息已复制到剪贴板。";
-            }
-            catch (Exception ex)
-            {
-                deviceInfoStatusLabel.Text = "复制失败：" + ex.Message;
-            }
+            var label = deviceList.SelectedItem as string;
+            if (!string.IsNullOrWhiteSpace(label)) return label;
+            if (deviceList.CheckedItems.Count == 1) return deviceList.CheckedItems[0].ToString();
+            return null;
         }
 
         private string BuildDeviceInfoReport(string adb, DeviceInfo device, out string error)
@@ -2627,12 +2549,6 @@ namespace ApkInstallTool
             restoreDensityButton.Enabled = enabled;
         }
 
-        private void SetDeviceInfoControlsEnabled(bool enabled)
-        {
-            refreshDeviceInfoButton.Enabled = enabled;
-            copyDeviceInfoButton.Enabled = enabled && deviceInfoTextBox.TextLength > 0;
-        }
-
         private void SetLogcatUi(bool running)
         {
             var busy = running || isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning;
@@ -2674,7 +2590,6 @@ namespace ApkInstallTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDisplayControlControlsEnabled(!busy);
-            SetDeviceInfoControlsEnabled(!busy);
             refreshButton.Enabled = !busy;
             deviceList.Enabled = !busy;
         }
@@ -3228,7 +3143,6 @@ namespace ApkInstallTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDisplayControlControlsEnabled(!busy);
-            SetDeviceInfoControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenshotRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             if (running) UpdateScreenRecordStatus();
@@ -3570,6 +3484,24 @@ namespace ApkInstallTool
             return process;
         }
 
+        private void OnDeviceListSelectionChanged()
+        {
+            BeginSyncAddressFromCurrentDevice();
+            BeginDisplayControlAutoRefresh();
+            BeginDeviceInfoAutoRefresh(false);
+        }
+
+        private void OnDeviceListMouseUp(MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+            var index = deviceList.IndexFromPoint(e.Location);
+            if (index < 0 || index >= deviceList.Items.Count) return;
+            if (deviceList.SelectedIndex != index) deviceList.SelectedIndex = index;
+            BeginSyncAddressFromCurrentDevice();
+            BeginDisplayControlAutoRefresh();
+            BeginDeviceInfoAutoRefresh(true);
+        }
+
         private void BeginSyncAddressFromCurrentDevice() { BeginInvokeIfNeeded(delegate { FillAddressFromCurrentDevice(); }); }
 
         private void BrowseApk()
@@ -3688,7 +3620,6 @@ namespace ApkInstallTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDisplayControlControlsEnabled(!busy);
-            SetDeviceInfoControlsEnabled(!busy);
             deviceList.Enabled = !busy;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
         }
@@ -4381,16 +4312,27 @@ namespace ApkInstallTool
         private void RefreshDevices()
         {
             if (isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning) return;
+            var previousSerial = currentDeviceInfoSerial;
+            DeviceInfo selectedDevice;
+            if (TryGetSelectedDeviceForDeviceInfo(out selectedDevice)) previousSerial = selectedDevice.Serial;
             deviceList.Items.Clear();
             deviceMap.Clear();
             var adb = FindAdb();
             if (adb == null) { AddLogLine("未找到 adb。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。"); statusLabel.Text = "未找到 adb"; return; }
             AddLogLine("刷新设备...");
             var devices = GetConnectedDevices(adb);
+            var selectedIndex = -1;
             foreach (var device in devices)
             {
                 deviceMap[device.Label] = device;
                 deviceList.Items.Add(device.Label, device.State == "device");
+                if (selectedIndex < 0 && !string.IsNullOrEmpty(previousSerial) && string.Equals(device.Serial, previousSerial, StringComparison.Ordinal)) selectedIndex = deviceList.Items.Count - 1;
+            }
+            if (selectedIndex >= 0) deviceList.SelectedIndex = selectedIndex;
+            else if (!string.IsNullOrEmpty(currentDeviceInfoSerial))
+            {
+                currentDeviceInfoSerial = "";
+                deviceInfoTextBox.Text = "请点击下方目标设备列表中的一台 device 状态设备。";
             }
             statusLabel.Text = "检测到 " + devices.Count + " 台设备，可用 " + devices.Count(d => d.State == "device") + " 台。";
             BeginDisplayControlAutoRefresh();
@@ -4814,7 +4756,6 @@ namespace ApkInstallTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDisplayControlControlsEnabled(!busy);
-            SetDeviceInfoControlsEnabled(!busy);
             cancelButton.Enabled = executing || isDeviceCommandRunning || IsMediaCaptureRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             statusLabel.Text = executing ? "正在执行..." : statusLabel.Text;
@@ -4864,7 +4805,6 @@ namespace ApkInstallTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDisplayControlControlsEnabled(!busy);
-            SetDeviceInfoControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenRecordRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             if (running)
@@ -4920,6 +4860,8 @@ namespace ApkInstallTool
         {
             var candidates = new List<string>();
             candidates.Add(Path.Combine(appDir, "adb.exe"));
+            candidates.Add(Path.Combine(appDir, "scrcpy", "adb.exe"));
+            candidates.Add(Path.Combine(appDir, "bin", "scrcpy", "adb.exe"));
             candidates.Add("adb.exe");
             var androidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
             var androidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
