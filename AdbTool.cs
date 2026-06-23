@@ -246,6 +246,7 @@ namespace AdbTool
             logDir = Path.Combine(appDir, "log");
             screenshotDir = Path.Combine(appDir, "screenshots");
             Text = AppDisplayName;
+            ApplyWindowIcon();
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(1080, 820);
             Size = new Size(1180, 900);
@@ -263,6 +264,18 @@ namespace AdbTool
             UpdateExecutionOptionState();
             UpdateTransferStatus();
             RefreshDevices();
+        }
+
+        private void ApplyWindowIcon()
+        {
+            try
+            {
+                var icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (icon != null) Icon = icon;
+            }
+            catch
+            {
+            }
         }
 
         private void BuildUi()
