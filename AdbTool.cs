@@ -101,6 +101,7 @@ namespace AdbTool
         private readonly TextBox apkTextBox = new TextBox();
         private readonly Button browseButton = new Button();
         private readonly Button refreshButton = new Button();
+        private readonly Button settingsButton = new Button();
         private readonly TextBox connectAddressTextBox = new TextBox();
         private readonly Button connectButton = new Button();
         private readonly Button disconnectButton = new Button();
@@ -181,9 +182,12 @@ namespace AdbTool
         private readonly ToolTip displayControlToolTip = new ToolTip();
         private readonly System.Windows.Forms.Timer displayControlRefreshTimer = new System.Windows.Forms.Timer();
 
+        private readonly ToolTip toolPathToolTip = new ToolTip();
+
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
         private readonly object processLock = new object();
         private readonly string appDir;
+        private readonly string legacyConfigPath;
         private readonly string configPath;
         private readonly string logDir;
         private readonly string screenshotDir;
@@ -233,6 +237,8 @@ namespace AdbTool
         private DisplayControlInfo currentDisplayControlInfo;
         private volatile bool isDisplayControlAutoRefreshing;
         private string currentDeviceInfoSerial = "";
+        private string configuredAdbPath = "";
+        private string configuredAaptPath = "";
 
         private bool IsMediaCaptureRunning
         {
@@ -242,9 +248,11 @@ namespace AdbTool
         public MainForm()
         {
             appDir = AppDomain.CurrentDomain.BaseDirectory;
-            configPath = Path.Combine(appDir, ConfigFileName);
-            logDir = Path.Combine(appDir, "log");
-            screenshotDir = Path.Combine(appDir, "screenshots");
+            legacyConfigPath = Path.Combine(appDir, ConfigFileName);
+            var userDataDir = GetUserDataDir(appDir);
+            configPath = Path.Combine(userDataDir, ConfigFileName);
+            logDir = Path.Combine(userDataDir, "log");
+            screenshotDir = GetDefaultScreenshotDir(appDir);
             Text = AppDisplayName;
             ApplyWindowIcon();
             StartPosition = FormStartPosition.CenterScreen;
@@ -254,13 +262,14 @@ namespace AdbTool
             AllowDrop = true;
             BuildUi();
             WireEvents();
-            Directory.CreateDirectory(logDir);
-            Directory.CreateDirectory(screenshotDir);
+            EnsureDirectory(logDir);
+            EnsureDirectory(screenshotDir);
             InitLogcatDefaults();
             InitTransferDefaults();
             InitScreenshotDefaults();
             LoadConfig();
             configReady = true;
+            UpdateToolPathStatus();
             UpdateExecutionOptionState();
             UpdateTransferStatus();
             RefreshDevices();
@@ -959,6 +968,159 @@ namespace AdbTool
             panel.Controls.Add(button, column, 0);
         }
 
+        private bool ShowToolSettingsDialog()
+        {
+            using (var dialog = new Form())
+            using (var dialogToolTip = new ToolTip())
+            {
+                dialog.Text = "工具设置";
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ShowInTaskbar = false;
+                dialog.ClientSize = new Size(720, 260);
+                dialog.Font = Font;
+
+                var panel = new TableLayoutPanel();
+                panel.Dock = DockStyle.Fill;
+                panel.Padding = new Padding(12);
+                panel.ColumnCount = 1;
+                panel.RowCount = 5;
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+                panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+                dialog.Controls.Add(panel);
+
+                var adbTextBox = new TextBox();
+                var aaptTextBox = new TextBox();
+                var browseAdbButton = new Button();
+                var browseAaptButton = new Button();
+                var autoDetectButton = new Button();
+                var clearButton = new Button();
+                var statusLabel = new Label();
+                var okButton = new Button();
+                var cancelButton = new Button();
+
+                adbTextBox.Text = configuredAdbPath;
+                aaptTextBox.Text = configuredAaptPath;
+                AddToolPathRow(panel, 0, "ADB 路径", adbTextBox, browseAdbButton);
+                AddToolPathRow(panel, 1, "AAPT 路径", aaptTextBox, browseAaptButton);
+
+                var actionPanel = new TableLayoutPanel();
+                actionPanel.Dock = DockStyle.Fill;
+                actionPanel.ColumnCount = 3;
+                actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+                actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+                actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                panel.Controls.Add(actionPanel, 0, 2);
+
+                autoDetectButton.Text = "自动检测";
+                AddActionButton(actionPanel, autoDetectButton, 0);
+                clearButton.Text = "清除自定义路径";
+                AddActionButton(actionPanel, clearButton, 1);
+
+                statusLabel.Dock = DockStyle.Fill;
+                statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+                statusLabel.ForeColor = Color.FromArgb(60, 60, 60);
+                panel.Controls.Add(statusLabel, 0, 3);
+
+                var footerPanel = new TableLayoutPanel();
+                footerPanel.Dock = DockStyle.Fill;
+                footerPanel.ColumnCount = 4;
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 4));
+                panel.Controls.Add(footerPanel, 0, 4);
+
+                var hintLabel = new Label();
+                hintLabel.Dock = DockStyle.Fill;
+                hintLabel.TextAlign = ContentAlignment.MiddleLeft;
+                hintLabel.ForeColor = Color.FromArgb(90, 90, 90);
+                hintLabel.Text = "adb 是必需工具；aapt/aapt2 仅用于解析 APK 包名、版本和启动 Activity。";
+                footerPanel.Controls.Add(hintLabel, 0, 0);
+
+                okButton.Text = "确定";
+                okButton.Dock = DockStyle.Fill;
+                okButton.Margin = new Padding(0, 6, 8, 6);
+                okButton.DialogResult = DialogResult.OK;
+                footerPanel.Controls.Add(okButton, 1, 0);
+
+                cancelButton.Text = "取消";
+                cancelButton.Dock = DockStyle.Fill;
+                cancelButton.Margin = new Padding(0, 6, 8, 6);
+                cancelButton.DialogResult = DialogResult.Cancel;
+                footerPanel.Controls.Add(cancelButton, 2, 0);
+
+                dialog.AcceptButton = okButton;
+                dialog.CancelButton = cancelButton;
+
+                dialogToolTip.SetToolTip(adbTextBox, "可留空让程序自动从 PATH、ANDROID_HOME、ANDROID_SDK_ROOT 和常见 SDK 目录查找。");
+                dialogToolTip.SetToolTip(aaptTextBox, "可选择 Android SDK Build Tools 中的 aapt.exe 或 aapt2.exe。");
+
+                Action refreshStatus = delegate { UpdateToolPathStatus(statusLabel, adbTextBox.Text, aaptTextBox.Text); };
+                adbTextBox.TextChanged += delegate { refreshStatus(); };
+                aaptTextBox.TextChanged += delegate { refreshStatus(); };
+                browseAdbButton.Click += delegate { BrowseToolPath(adbTextBox, "选择 adb.exe", "adb.exe|adb.exe|所有文件 (*.*)|*.*"); refreshStatus(); };
+                browseAaptButton.Click += delegate { BrowseToolPath(aaptTextBox, "选择 aapt.exe 或 aapt2.exe", "Android APK 工具 (aapt*.exe)|aapt*.exe|所有文件 (*.*)|*.*"); refreshStatus(); };
+                autoDetectButton.Click += delegate
+                {
+                    adbTextBox.Text = FindAdb(true) ?? "";
+                    aaptTextBox.Text = FindAapt(true) ?? "";
+                    refreshStatus();
+                };
+                clearButton.Click += delegate
+                {
+                    adbTextBox.Text = "";
+                    aaptTextBox.Text = "";
+                    refreshStatus();
+                };
+                refreshStatus();
+
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    UpdateToolPathStatus();
+                    return false;
+                }
+
+                configuredAdbPath = NormalizeToolPathSetting(adbTextBox.Text);
+                configuredAaptPath = NormalizeToolPathSetting(aaptTextBox.Text);
+                SaveConfig();
+                UpdateToolPathStatus();
+                RefreshDevices();
+                return true;
+            }
+        }
+
+        private void AddToolPathRow(TableLayoutPanel parent, int row, string labelText, TextBox textBox, Button button)
+        {
+            var rowPanel = new TableLayoutPanel();
+            rowPanel.Dock = DockStyle.Fill;
+            rowPanel.ColumnCount = 3;
+            rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+            rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            parent.Controls.Add(rowPanel, 0, row);
+
+            var label = new Label();
+            label.Text = labelText;
+            label.Dock = DockStyle.Fill;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+            rowPanel.Controls.Add(label, 0, 0);
+
+            textBox.Dock = DockStyle.Fill;
+            textBox.Margin = new Padding(0, 4, 8, 4);
+            rowPanel.Controls.Add(textBox, 1, 0);
+
+            button.Text = "选择...";
+            button.Dock = DockStyle.Fill;
+            button.Margin = new Padding(0, 3, 0, 3);
+            rowPanel.Controls.Add(button, 2, 0);
+        }
+
         private void BuildSharedDeviceArea(Control parent)
         {
             var devicePanel = new TableLayoutPanel();
@@ -970,8 +1132,9 @@ namespace AdbTool
             parent.Controls.Add(devicePanel);
             var deviceHeader = new TableLayoutPanel();
             deviceHeader.Dock = DockStyle.Fill;
-            deviceHeader.ColumnCount = 2;
+            deviceHeader.ColumnCount = 3;
             deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
             devicePanel.Controls.Add(deviceHeader, 0, 0);
             var deviceLabel = new Label();
@@ -979,10 +1142,14 @@ namespace AdbTool
             deviceLabel.Dock = DockStyle.Fill;
             deviceLabel.TextAlign = ContentAlignment.MiddleLeft;
             deviceHeader.Controls.Add(deviceLabel, 0, 0);
+            settingsButton.Text = "设置...";
+            settingsButton.Dock = DockStyle.Fill;
+            settingsButton.Margin = new Padding(4, 2, 4, 2);
+            deviceHeader.Controls.Add(settingsButton, 1, 0);
             refreshButton.Text = "刷新";
             refreshButton.Dock = DockStyle.Fill;
             refreshButton.Margin = new Padding(4, 2, 4, 2);
-            deviceHeader.Controls.Add(refreshButton, 1, 0);
+            deviceHeader.Controls.Add(refreshButton, 2, 0);
             deviceList.Dock = DockStyle.Fill;
             deviceList.CheckOnClick = true;
             devicePanel.Controls.Add(deviceList, 0, 1);
@@ -1030,7 +1197,8 @@ namespace AdbTool
         private void WireEvents()
         {
             browseButton.Click += delegate { BrowseApk(); };
-            refreshButton.Click += delegate { RefreshDevices(); };
+            refreshButton.Click += delegate { RefreshDevices(true); };
+            settingsButton.Click += delegate { ShowToolSettingsDialog(); };
             connectButton.Click += delegate { ConnectDevice(); };
             disconnectButton.Click += delegate { DisconnectDevice(); };
             clearLogButton.Click += delegate { logBox.Clear(); };
@@ -1122,6 +1290,7 @@ namespace AdbTool
             {
                 applyingLayoutConfig = false;
             }
+            SaveConfig();
         }
 
         private void ConfigureLayoutMinSizes()
@@ -1192,6 +1361,78 @@ namespace AdbTool
             UpdateScreenRecordOptionState();
         }
 
+        private void BrowseToolPath(TextBox targetTextBox, string title, string filter)
+        {
+            using (var dialog = new OpenFileDialog())
+            {
+                dialog.Title = title;
+                dialog.Filter = filter;
+                dialog.Multiselect = false;
+                var current = ExpandToolPathCandidate(targetTextBox.Text);
+                if (!string.IsNullOrWhiteSpace(current) && File.Exists(current))
+                {
+                    dialog.InitialDirectory = Path.GetDirectoryName(current);
+                    dialog.FileName = Path.GetFileName(current);
+                }
+                if (dialog.ShowDialog(this) == DialogResult.OK) targetTextBox.Text = dialog.FileName;
+            }
+        }
+
+        private void UpdateToolPathStatus()
+        {
+            if (settingsButton == null) return;
+            toolPathToolTip.SetToolTip(settingsButton, BuildToolPathStatusText(configuredAdbPath, configuredAaptPath));
+        }
+
+        private void UpdateToolPathStatus(Label label, string adbPath, string aaptPath)
+        {
+            if (label == null) return;
+            label.Text = BuildToolPathStatusText(adbPath, aaptPath);
+        }
+
+        private string BuildToolPathStatusText(string adbPath, string aaptPath)
+        {
+            var adb = FindAdb(adbPath, false);
+            var aapt = FindAapt(aaptPath, false);
+            var adbStatus = adb == null
+                ? "ADB：未找到，请安装 Android SDK Platform Tools 或手动指定 adb.exe。"
+                : "ADB：" + adb + GetToolFallbackNote(adbPath, adb);
+            var aaptStatus = aapt == null
+                ? "AAPT：未找到，APK 详情解析、启动应用和清空数据等需要包名的功能会受限。"
+                : "AAPT：" + aapt + GetToolFallbackNote(aaptPath, aapt);
+            return adbStatus + Environment.NewLine + aaptStatus;
+        }
+
+        private string GetToolFallbackNote(string configuredPath, string resolvedPath)
+        {
+            if (string.IsNullOrWhiteSpace(configuredPath)) return "";
+            var configuredResolved = FindCommand(new[] { ExpandToolPathCandidate(configuredPath) });
+            if (string.IsNullOrWhiteSpace(configuredResolved)) return "（自定义路径无效，已回退自动查找）";
+            return string.Equals(configuredResolved, resolvedPath, StringComparison.OrdinalIgnoreCase) ? "（自定义）" : "（已回退自动查找）";
+        }
+
+        private string GetMissingAdbMessage()
+        {
+            return "未找到 adb.exe。\r\n\r\n请安装 Android SDK Platform Tools，或在“工具设置”中手动指定 adb.exe 路径。";
+        }
+
+        private string GetMissingAaptMessage()
+        {
+            return "当前操作需要解析 APK 包名，但未找到 aapt.exe 或 aapt2.exe。\r\n\r\n普通安装仍可使用；如需启动应用、清空数据或卸载，请安装 Android SDK Build Tools，或在“工具设置”中手动指定 aapt/aapt2 路径。";
+        }
+
+        private void HandleMissingAdb(bool showDialog)
+        {
+            AddLogLine("未找到 adb.exe。请在工具设置中指定 adb.exe，或安装 Android SDK Platform Tools。");
+            statusLabel.Text = "未找到 adb，请打开工具设置配置 adb.exe。";
+            UpdateToolPathStatus();
+            if (showDialog)
+            {
+                MessageBox.Show(this, GetMissingAdbMessage(), AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowToolSettingsDialog();
+            }
+        }
+
         private void BeginDeviceInfoAutoRefresh()
         {
             BeginDeviceInfoAutoRefresh(false);
@@ -1227,9 +1468,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                var message = "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。";
-                if (automatic) statusLabel.Text = message;
-                else MessageBox.Show(this, message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(!automatic);
                 return;
             }
 
@@ -1650,6 +1889,7 @@ namespace AdbTool
             if (adb == null)
             {
                 displayControlStatusLabel.Text = "未找到 adb.exe，无法自动读取显示信息。";
+                UpdateToolPathStatus();
                 return;
             }
 
@@ -1790,7 +2030,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
 
@@ -2188,7 +2428,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
 
@@ -2246,7 +2486,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
             if (clearBefore)
@@ -2653,6 +2893,7 @@ namespace AdbTool
             UpdateCaptureActionButtons(busy);
             SetDisplayControlControlsEnabled(!busy);
             refreshButton.Enabled = !busy;
+            settingsButton.Enabled = !busy;
             deviceList.Enabled = !busy;
         }
 
@@ -2863,7 +3104,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
 
@@ -2937,7 +3178,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
 
@@ -3166,6 +3407,7 @@ namespace AdbTool
             var busy = running || isExecuting || isDeviceCommandRunning || isLogcatRunning || isScreenshotRunning;
             browseButton.Enabled = !busy;
             refreshButton.Enabled = !busy;
+            settingsButton.Enabled = !busy;
             connectButton.Enabled = !busy;
             disconnectButton.Enabled = !busy;
             connectAddressTextBox.Enabled = !busy;
@@ -3615,7 +3857,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
             isDeviceCommandRunning = true;
@@ -3647,6 +3889,7 @@ namespace AdbTool
             connectButton.Enabled = !busy;
             disconnectButton.Enabled = !busy;
             refreshButton.Enabled = !busy;
+            settingsButton.Enabled = !busy;
             connectAddressTextBox.Enabled = !busy;
             cancelButton.Enabled = running || isExecuting || IsMediaCaptureRunning;
             installButton.Enabled = !busy;
@@ -3721,9 +3964,13 @@ namespace AdbTool
         {
             try
             {
-                if (!File.Exists(configPath)) return;
-                var json = File.ReadAllText(configPath, Encoding.UTF8);
+                var sourceConfigPath = File.Exists(configPath) ? configPath : (File.Exists(legacyConfigPath) ? legacyConfigPath : null);
+                if (sourceConfigPath == null) return;
+                var json = File.ReadAllText(sourceConfigPath, Encoding.UTF8);
                 loadingConfig = true;
+
+                configuredAdbPath = NormalizeToolPathSetting(ReadJsonString(json, "adbPath"));
+                configuredAaptPath = NormalizeToolPathSetting(ReadJsonString(json, "aaptPath"));
 
                 var windowWidth = ReadJsonInt(json, "windowWidth");
                 var windowHeight = ReadJsonInt(json, "windowHeight");
@@ -3742,7 +3989,7 @@ namespace AdbTool
                 if (!string.IsNullOrEmpty(lastApkPath) && File.Exists(lastApkPath)) apkTextBox.Text = lastApkPath;
 
                 var logRecordOutputPath = ReadJsonString(json, "logRecordOutputPath");
-                if (!string.IsNullOrWhiteSpace(logRecordOutputPath)) logRecordPathTextBox.Text = logRecordOutputPath;
+                if (!string.IsNullOrWhiteSpace(logRecordOutputPath) && !IsLegacyAppRuntimePath(logRecordOutputPath, "log")) logRecordPathTextBox.Text = logRecordOutputPath;
 
                 var logRecordFilterTags = ReadJsonString(json, "logRecordFilterTags");
                 if (logRecordFilterTags != null) logRecordTagTextBox.Text = logRecordFilterTags;
@@ -3777,7 +4024,7 @@ namespace AdbTool
                 ApplyTransferDirectionUi();
 
                 var screenshotOutputDir = ReadJsonString(json, "screenshotOutputDir");
-                if (!string.IsNullOrWhiteSpace(screenshotOutputDir)) screenshotOutputDirTextBox.Text = screenshotOutputDir;
+                if (!string.IsNullOrWhiteSpace(screenshotOutputDir) && !IsLegacyAppRuntimePath(screenshotOutputDir, "screenshots")) screenshotOutputDirTextBox.Text = screenshotOutputDir;
 
                 var screenRecordUseTimeLimit = ReadJsonBool(json, "screenRecordUseTimeLimit");
                 if (screenRecordUseTimeLimit.HasValue) screenRecordTimeLimitCheckBox.Checked = screenRecordUseTimeLimit.Value;
@@ -3805,10 +4052,13 @@ namespace AdbTool
                 if (!configReady || loadingConfig) return;
                 CaptureLayoutHeights();
                 StoreTransferFieldsForCurrentDirection();
+                EnsureDirectory(Path.GetDirectoryName(configPath));
                 var lastApkPath = lastApkPathOverride ?? apkTextBox.Text;
                 var windowSize = GetConfigWindowSize();
                 var json =
                     "{\r\n" +
+                    "    \"adbPath\":  \"" + EscapeJsonString(configuredAdbPath) + "\",\r\n" +
+                    "    \"aaptPath\":  \"" + EscapeJsonString(configuredAaptPath) + "\",\r\n" +
                     "    \"lastApkPath\":  \"" + EscapeJsonString(lastApkPath) + "\",\r\n" +
                     "    \"windowWidth\":  " + windowSize.Width.ToString() + ",\r\n" +
                     "    \"windowHeight\":  " + windowSize.Height.ToString() + ",\r\n" +
@@ -4098,7 +4348,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "\u672a\u627e\u5230 adb.exe\u3002\u8bf7\u5b89\u88c5 Android SDK Platform Tools\uff0c\u6216\u628a adb.exe \u52a0\u5165 PATH\u3002", "APK\u5b89\u88c5\u5de5\u5177", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
 
@@ -4304,6 +4554,69 @@ namespace AdbTool
             return name.Length == 0 ? "device" : name;
         }
 
+        private static string GetUserDataDir(string fallbackDir)
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrWhiteSpace(localAppData)) return Path.Combine(localAppData, "ADBTool");
+            return Path.Combine(fallbackDir, "user-data");
+        }
+
+        private static string GetDefaultScreenshotDir(string fallbackDir)
+        {
+            var pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            if (!string.IsNullOrWhiteSpace(pictures)) return Path.Combine(pictures, "ADBTool");
+
+            var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrWhiteSpace(documents)) return Path.Combine(documents, "ADBTool");
+
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrWhiteSpace(userProfile)) return Path.Combine(userProfile, "Pictures", "ADBTool");
+
+            return Path.Combine(fallbackDir, "screenshots");
+        }
+
+        private static void EnsureDirectory(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path)) Directory.CreateDirectory(path);
+            }
+            catch { }
+        }
+
+        private string NormalizeToolPathSetting(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return "";
+            return path.Trim().Trim('"');
+        }
+
+        private string ExpandToolPathCandidate(string path)
+        {
+            path = NormalizeToolPathSetting(path);
+            if (string.IsNullOrWhiteSpace(path)) return "";
+            if (Path.IsPathRooted(path)) return path;
+            if (path.IndexOf(Path.DirectorySeparatorChar) >= 0 || path.IndexOf(Path.AltDirectorySeparatorChar) >= 0)
+            {
+                try { return Path.GetFullPath(Path.Combine(appDir, path)); } catch { return path; }
+            }
+            return path;
+        }
+
+        private bool IsLegacyAppRuntimePath(string path, string folderName)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            try
+            {
+                var configured = Path.GetFullPath(path.Trim().Trim('"')).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var legacy = Path.GetFullPath(Path.Combine(appDir, folderName)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return string.Equals(configured, legacy, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static string GetDefaultTransferPullTargetDir()
         {
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -4353,9 +4666,9 @@ namespace AdbTool
         {
             var info = new ApkInfo();
             var aapt = FindAapt();
-            if (aapt == null) { info.ParseError = "未找到 aapt，无法读取 APK 详情。"; return info; }
+            if (aapt == null) { info.ParseError = GetMissingAaptMessage().Replace("\r\n\r\n", " "); return info; }
             var result = InvokeProcess(aapt, new[] { "dump", "badging", apkPath }, false);
-            if (result.ExitCode != 0) { info.ParseError = FirstUsefulLine(result.Output) ?? "aapt 执行失败。"; return info; }
+            if (result.ExitCode != 0) { info.ParseError = FirstUsefulLine(result.Output) ?? "aapt/aapt2 执行失败。"; return info; }
             var packageMatch = Regex.Match(result.Output, @"package: name='(?<name>[^']+)'\s+versionCode='(?<code>[^']*)'\s+versionName='(?<version>[^']*)'");
             if (packageMatch.Success)
             {
@@ -4373,6 +4686,11 @@ namespace AdbTool
 
         private void RefreshDevices()
         {
+            RefreshDevices(false);
+        }
+
+        private void RefreshDevices(bool showMissingAdbDialog)
+        {
             if (isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning) return;
             var previousSerial = currentDeviceInfoSerial;
             DeviceInfo selectedDevice;
@@ -4380,7 +4698,7 @@ namespace AdbTool
             deviceList.Items.Clear();
             deviceMap.Clear();
             var adb = FindAdb();
-            if (adb == null) { AddLogLine("未找到 adb。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。"); statusLabel.Text = "未找到 adb"; return; }
+            if (adb == null) { HandleMissingAdb(showMissingAdbDialog); return; }
             AddLogLine("刷新设备...");
             var devices = GetConnectedDevices(adb);
             var selectedIndex = -1;
@@ -4476,7 +4794,7 @@ namespace AdbTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleMissingAdb(true);
                 return;
             }
             var mode = GetExecutionMode();
@@ -4484,7 +4802,9 @@ namespace AdbTool
             var apkInfo = currentApkInfo ?? GetApkInfo(apkPath);
             if ((mode != "Install" || launchAfterInstall) && string.IsNullOrEmpty(apkInfo.PackageName))
             {
-                MessageBox.Show(this, "当前操作需要 APK 包名，但解析 APK 信息失败。请确认 Android SDK Build Tools 中存在 aapt.exe。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                var detail = string.IsNullOrWhiteSpace(apkInfo.ParseError) ? "请确认 APK 文件有效，或在“工具设置”中配置 aapt/aapt2。" : apkInfo.ParseError;
+                MessageBox.Show(this, "当前操作需要 APK 包名，但解析 APK 信息失败。\r\n\r\n" + detail, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (FindAapt() == null) ShowToolSettingsDialog();
                 return;
             }
             SaveLastApkPath(apkPath);
@@ -4779,6 +5099,7 @@ namespace AdbTool
             var busy = executing || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning;
             browseButton.Enabled = !busy;
             refreshButton.Enabled = !busy;
+            settingsButton.Enabled = !busy;
             connectButton.Enabled = !busy;
             disconnectButton.Enabled = !busy;
             connectAddressTextBox.Enabled = !busy;
@@ -4828,6 +5149,7 @@ namespace AdbTool
             var busy = running || isExecuting || isDeviceCommandRunning || isLogcatRunning;
             browseButton.Enabled = !busy;
             refreshButton.Enabled = !busy;
+            settingsButton.Enabled = !busy;
             connectButton.Enabled = !busy;
             disconnectButton.Enabled = !busy;
             connectAddressTextBox.Enabled = !busy;
@@ -4920,40 +5242,98 @@ namespace AdbTool
 
         private string FindAdb()
         {
+            return FindAdb(false);
+        }
+
+        private string FindAdb(bool ignoreConfiguredPath)
+        {
+            return FindAdb(configuredAdbPath, ignoreConfiguredPath);
+        }
+
+        private string FindAdb(string adbPath, bool ignoreConfiguredPath)
+        {
             var candidates = new List<string>();
+            if (!ignoreConfiguredPath) candidates.Add(ExpandToolPathCandidate(adbPath));
             candidates.Add(Path.Combine(appDir, "adb.exe"));
+            candidates.Add(Path.Combine(appDir, "platform-tools", "adb.exe"));
+            candidates.Add(Path.Combine(appDir, "sdk", "platform-tools", "adb.exe"));
+            candidates.Add(Path.Combine(appDir, "Android", "Sdk", "platform-tools", "adb.exe"));
             candidates.Add(Path.Combine(appDir, "scrcpy", "adb.exe"));
             candidates.Add(Path.Combine(appDir, "bin", "scrcpy", "adb.exe"));
             candidates.Add("adb.exe");
-            var androidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
-            var androidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            if (!string.IsNullOrEmpty(androidHome)) candidates.Add(Path.Combine(androidHome, "platform-tools", "adb.exe"));
-            if (!string.IsNullOrEmpty(androidSdkRoot)) candidates.Add(Path.Combine(androidSdkRoot, "platform-tools", "adb.exe"));
-            if (!string.IsNullOrEmpty(localAppData)) candidates.Add(Path.Combine(localAppData, "Android", "Sdk", "platform-tools", "adb.exe"));
+            foreach (var root in GetAndroidSdkRootCandidates()) candidates.Add(Path.Combine(root, "platform-tools", "adb.exe"));
             return FindCommand(candidates);
         }
 
         private string FindAapt()
         {
+            return FindAapt(false);
+        }
+
+        private string FindAapt(bool ignoreConfiguredPath)
+        {
+            return FindAapt(configuredAaptPath, ignoreConfiguredPath);
+        }
+
+        private string FindAapt(string aaptPath, bool ignoreConfiguredPath)
+        {
             var candidates = new List<string>();
+            if (!ignoreConfiguredPath) candidates.Add(ExpandToolPathCandidate(aaptPath));
+            candidates.Add(Path.Combine(appDir, "aapt.exe"));
+            candidates.Add(Path.Combine(appDir, "aapt2.exe"));
+            candidates.Add(Path.Combine(appDir, "build-tools", "aapt.exe"));
+            candidates.Add(Path.Combine(appDir, "build-tools", "aapt2.exe"));
             candidates.Add("aapt.exe");
-            var androidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
-            var androidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var sdkRoots = new[] { androidHome, androidSdkRoot, string.IsNullOrEmpty(localAppData) ? null : Path.Combine(localAppData, "Android", "Sdk") }.Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            foreach (var root in sdkRoots)
-            {
-                var buildTools = Path.Combine(root, "build-tools");
-                if (!Directory.Exists(buildTools)) continue;
-                try
-                {
-                    var aapt = Directory.GetFiles(buildTools, "aapt.exe", SearchOption.AllDirectories).OrderByDescending(p => p).FirstOrDefault();
-                    if (aapt != null) candidates.Add(aapt);
-                }
-                catch { }
-            }
+            candidates.Add("aapt2.exe");
+            foreach (var root in GetAndroidSdkRootCandidates()) AddBuildToolCandidates(candidates, root);
             return FindCommand(candidates);
+        }
+
+        private static IEnumerable<string> GetAndroidSdkRootCandidates()
+        {
+            var roots = new List<string>();
+            roots.Add(Environment.GetEnvironmentVariable("ANDROID_HOME"));
+            roots.Add(Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT"));
+
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (!string.IsNullOrWhiteSpace(localAppData)) roots.Add(Path.Combine(localAppData, "Android", "Sdk"));
+
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (!string.IsNullOrWhiteSpace(programFiles))
+            {
+                roots.Add(Path.Combine(programFiles, "Android", "android-sdk"));
+                roots.Add(Path.Combine(programFiles, "Android", "Sdk"));
+            }
+
+            var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            if (!string.IsNullOrWhiteSpace(programFilesX86))
+            {
+                roots.Add(Path.Combine(programFilesX86, "Android", "android-sdk"));
+                roots.Add(Path.Combine(programFilesX86, "Android", "Sdk"));
+            }
+
+            return roots
+                .Where(p => !string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
+                .Select(p => Path.GetFullPath(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static void AddBuildToolCandidates(List<string> candidates, string sdkRoot)
+        {
+            var buildTools = Path.Combine(sdkRoot, "build-tools");
+            if (!Directory.Exists(buildTools)) return;
+            try
+            {
+                foreach (var toolName in new[] { "aapt.exe", "aapt2.exe" })
+                {
+                    foreach (var tool in Directory.GetFiles(buildTools, toolName, SearchOption.AllDirectories).OrderByDescending(p => p))
+                    {
+                        candidates.Add(tool);
+                    }
+                }
+            }
+            catch { }
         }
 
         private static string FindCommand(IEnumerable<string> candidates)
