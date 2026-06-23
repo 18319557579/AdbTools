@@ -1,4 +1,5 @@
 # Local runtime configuration
+adb-tool.config.json
 install-apk.config.json
 
 # Runtime logs

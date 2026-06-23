@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
-namespace ApkInstallTool
+namespace AdbTool
 {
     internal static class Program
     {
@@ -25,6 +25,11 @@ namespace ApkInstallTool
 
     internal sealed class MainForm : Form
     {
+        private const string AppDisplayName = "ADB工具";
+        private const string ConfigFileName = "adb-tool.config.json";
+        private const string RunLogPrefix = "adb-tool";
+        private const string RemoteTempFilePrefix = "adb-tool";
+
         private enum TransferDirection
         {
             ToDevice,
@@ -237,10 +242,10 @@ namespace ApkInstallTool
         public MainForm()
         {
             appDir = AppDomain.CurrentDomain.BaseDirectory;
-            configPath = Path.Combine(appDir, "install-apk.config.json");
+            configPath = Path.Combine(appDir, ConfigFileName);
             logDir = Path.Combine(appDir, "log");
             screenshotDir = Path.Combine(appDir, "screenshots");
-            Text = "APK安装工具";
+            Text = AppDisplayName;
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(1080, 820);
             Size = new Size(1180, 900);
@@ -1211,7 +1216,7 @@ namespace ApkInstallTool
             {
                 var message = "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。";
                 if (automatic) statusLabel.Text = message;
-                else MessageBox.Show(this, message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                else MessageBox.Show(this, message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -1278,13 +1283,13 @@ namespace ApkInstallTool
             var label = GetDeviceInfoTargetLabel();
             if (string.IsNullOrWhiteSpace(label))
             {
-                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             DeviceInfo device;
             if (!deviceMap.TryGetValue(label, out device) || device.State != "device")
             {
-                MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请选择状态为 device 的设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             return device;
@@ -1713,7 +1718,7 @@ namespace ApkInstallTool
             if (!TryReadPositiveInt(displayDensityValueTextBox, unit == "dp" ? "最小宽度" : "显示密度", out value)) return;
             if (unit == "DPI" && value < 72)
             {
-                MessageBox.Show(this, "显示密度必须大于等于 72 dpi。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "显示密度必须大于等于 72 dpi。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1772,7 +1777,7 @@ namespace ApkInstallTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -1805,20 +1810,20 @@ namespace ApkInstallTool
             if (checkedItems.Count == 0)
             {
                 ClearDisplayControlInfo();
-                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             if (checkedItems.Count > 1)
             {
                 ClearDisplayControlInfo();
-                MessageBox.Show(this, "显示控制一次只能选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "显示控制一次只能选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             DeviceInfo device;
             if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
             {
                 ClearDisplayControlInfo();
-                MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请选择状态为 device 的设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             return device;
@@ -2019,7 +2024,7 @@ namespace ApkInstallTool
             var text = textBox.Text.Trim();
             if (!int.TryParse(text, out value) || value <= 0)
             {
-                MessageBox.Show(this, fieldName + "必须填写正整数。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, fieldName + "必须填写正整数。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
             return true;
@@ -2170,7 +2175,7 @@ namespace ApkInstallTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "未找到 adb.exe。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -2228,7 +2233,7 @@ namespace ApkInstallTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "未找到 adb.exe。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             if (clearBefore)
@@ -2643,7 +2648,7 @@ namespace ApkInstallTool
             var path = ResolveLogRecordOutputPath(logRecordPathTextBox.Text);
             if (string.IsNullOrWhiteSpace(path))
             {
-                MessageBox.Show(this, "请输入日志输出路径。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请输入日志输出路径。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             try
@@ -2654,7 +2659,7 @@ namespace ApkInstallTool
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "无法创建日志输出目录：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "无法创建日志输出目录：" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
         }
@@ -2762,7 +2767,7 @@ namespace ApkInstallTool
                 if (tag.Length == 0) continue;
                 if (tag.IndexOf(':') >= 0)
                 {
-                    MessageBox.Show(this, "Tag 不需要填写等级。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, "Tag 不需要填写等级。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return false;
                 }
                 if (!tags.Contains(tag)) tags.Add(tag);
@@ -2775,18 +2780,18 @@ namespace ApkInstallTool
             var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
             if (checkedItems.Count == 0)
             {
-                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             if (checkedItems.Count > 1)
             {
-                MessageBox.Show(this, "只能同时录制一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "只能同时录制一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             DeviceInfo device;
             if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
             {
-                MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请选择状态为 device 的设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             return device;
@@ -2807,18 +2812,18 @@ namespace ApkInstallTool
             var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
             if (checkedItems.Count == 0)
             {
-                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             if (checkedItems.Count > 1)
             {
-                MessageBox.Show(this, actionName + "一次只能选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, actionName + "一次只能选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             DeviceInfo device;
             if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
             {
-                MessageBox.Show(this, "请选择状态为 device 的设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请选择状态为 device 的设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             return device;
@@ -2845,7 +2850,7 @@ namespace ApkInstallTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -2919,7 +2924,7 @@ namespace ApkInstallTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -3213,7 +3218,7 @@ namespace ApkInstallTool
 
         private bool TryCaptureScreenshotFallback(string adb, string serial, string outputPath)
         {
-            var remotePath = "/data/local/tmp/adb-tools-screenshot-" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "-" + SanitizeLocalFileName(serial) + ".png";
+            var remotePath = "/data/local/tmp/" + RemoteTempFilePrefix + "-screenshot-" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "-" + SanitizeLocalFileName(serial) + ".png";
             try
             {
                 var captureResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "screencap", "-p", ShellQuote(remotePath) }, true);
@@ -3261,12 +3266,12 @@ namespace ApkInstallTool
             var outputDir = ResolveScreenshotOutputDir(screenshotOutputDirTextBox.Text);
             if (string.IsNullOrWhiteSpace(outputDir))
             {
-                MessageBox.Show(this, "请输入" + actionName + "保存目录。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请输入" + actionName + "保存目录。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             if (File.Exists(outputDir))
             {
-                MessageBox.Show(this, actionName + "保存目录不能是文件。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, actionName + "保存目录不能是文件。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             try
@@ -3277,7 +3282,7 @@ namespace ApkInstallTool
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "无法创建" + actionName + "保存目录：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "无法创建" + actionName + "保存目录：" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
         }
@@ -3301,7 +3306,7 @@ namespace ApkInstallTool
 
         private static string GenerateScreenRecordRemotePath(string serial)
         {
-            return "/data/local/tmp/adb-tools-screenrecord-" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "-" + SanitizeLocalFileName(serial) + ".mp4";
+            return "/data/local/tmp/" + RemoteTempFilePrefix + "-screenrecord-" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "-" + SanitizeLocalFileName(serial) + ".mp4";
         }
 
         private static string GenerateScreenRecordPreviewFileName(string serial)
@@ -3409,7 +3414,7 @@ namespace ApkInstallTool
         {
             if (!HasLatestCaptureFile())
             {
-                MessageBox.Show(this, "当前没有可另存的截屏或录屏。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "当前没有可另存的截屏或录屏。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             using (var dialog = new SaveFileDialog())
@@ -3439,7 +3444,7 @@ namespace ApkInstallTool
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(this, "另存失败：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(this, "另存失败：" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
@@ -3460,7 +3465,7 @@ namespace ApkInstallTool
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "打开截屏目录失败：" + ex.Message, "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "打开截屏目录失败：" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -3569,7 +3574,7 @@ namespace ApkInstallTool
             var address = NormalizeAdbAddress(connectAddressTextBox.Text.Trim());
             if (address == null)
             {
-                MessageBox.Show(this, "请输入设备地址，例如 192.168.1.100:5555。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请输入设备地址，例如 192.168.1.100:5555。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             RunDeviceCommand("连接设备", new[] { "connect", address });
@@ -3585,7 +3590,7 @@ namespace ApkInstallTool
             }
             if (string.IsNullOrWhiteSpace(address))
             {
-                MessageBox.Show(this, "请输入要断连的设备地址，或在目标设备列表中选中一个设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请输入要断连的设备地址，或在目标设备列表中选中一个设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             RunDeviceCommand("断连设备", new[] { "disconnect", address });
@@ -3597,7 +3602,7 @@ namespace ApkInstallTool
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             isDeviceCommandRunning = true;
@@ -4446,19 +4451,19 @@ namespace ApkInstallTool
             var apkPath = apkTextBox.Text.Trim();
             if (!File.Exists(apkPath) || !string.Equals(Path.GetExtension(apkPath), ".apk", StringComparison.OrdinalIgnoreCase))
             {
-                MessageBox.Show(this, "请选择有效的 APK 文件。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请选择有效的 APK 文件。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
             if (checkedItems.Count == 0)
             {
-                MessageBox.Show(this, "请至少选择一台设备。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请至少选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             var adb = FindAdb();
             if (adb == null)
             {
-                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "未找到 adb.exe。请安装 Android SDK Platform Tools，或把 adb.exe 加入 PATH。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             var mode = GetExecutionMode();
@@ -4466,7 +4471,7 @@ namespace ApkInstallTool
             var apkInfo = currentApkInfo ?? GetApkInfo(apkPath);
             if ((mode != "Install" || launchAfterInstall) && string.IsNullOrEmpty(apkInfo.PackageName))
             {
-                MessageBox.Show(this, "当前操作需要 APK 包名，但解析 APK 信息失败。请确认 Android SDK Build Tools 中存在 aapt.exe。", "APK安装工具", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "当前操作需要 APK 包名，但解析 APK 信息失败。请确认 Android SDK Build Tools 中存在 aapt.exe。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             SaveLastApkPath(apkPath);
@@ -4891,7 +4896,7 @@ namespace ApkInstallTool
         {
             try
             {
-                var path = Path.Combine(logDir, "apk-install-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".log");
+                var path = Path.Combine(logDir, RunLogPrefix + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".log");
                 string text = "";
                 BeginInvokeIfNeeded(delegate { text = logBox.Text; });
                 Thread.Sleep(50);
