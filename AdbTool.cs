@@ -102,9 +102,7 @@ namespace AdbTool
         private readonly Button browseButton = new Button();
         private readonly Button refreshButton = new Button();
         private readonly Button settingsButton = new Button();
-        private readonly TextBox connectAddressTextBox = new TextBox();
         private readonly Button connectButton = new Button();
-        private readonly Button disconnectButton = new Button();
         private readonly CheckedListBox deviceList = new CheckedListBox();
         private readonly RadioButton installModeRadioButton = new RadioButton();
         private readonly RadioButton cleanInstallModeRadioButton = new RadioButton();
@@ -239,6 +237,7 @@ namespace AdbTool
         private string currentDeviceInfoSerial = "";
         private string configuredAdbPath = "";
         private string configuredAaptPath = "";
+        private string lastConnectAddress = "";
 
         private bool IsMediaCaptureRunning
         {
@@ -413,36 +412,9 @@ namespace AdbTool
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Fill;
             panel.ColumnCount = 1;
-            panel.RowCount = 2;
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            panel.RowCount = 1;
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             deviceInfoTab.Controls.Add(panel);
-
-            var connectPanel = new TableLayoutPanel();
-            connectPanel.Dock = DockStyle.Fill;
-            connectPanel.ColumnCount = 4;
-            connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
-            connectPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
-            panel.Controls.Add(connectPanel, 0, 0);
-
-            var connectLabel = new Label();
-            connectLabel.Text = "设备地址";
-            connectLabel.Dock = DockStyle.Fill;
-            connectLabel.TextAlign = ContentAlignment.MiddleLeft;
-            connectPanel.Controls.Add(connectLabel, 0, 0);
-            connectAddressTextBox.Dock = DockStyle.Fill;
-            connectAddressTextBox.Margin = new Padding(0, 4, 8, 4);
-            connectPanel.Controls.Add(connectAddressTextBox, 1, 0);
-            connectButton.Text = "连接设备";
-            connectButton.Dock = DockStyle.Fill;
-            connectButton.Margin = new Padding(0, 3, 8, 3);
-            connectPanel.Controls.Add(connectButton, 2, 0);
-            disconnectButton.Text = "断连设备";
-            disconnectButton.Dock = DockStyle.Fill;
-            disconnectButton.Margin = new Padding(0, 3, 0, 3);
-            connectPanel.Controls.Add(disconnectButton, 3, 0);
 
             deviceInfoTextBox.Dock = DockStyle.Fill;
             deviceInfoTextBox.Multiline = true;
@@ -451,9 +423,7 @@ namespace AdbTool
             deviceInfoTextBox.ReadOnly = true;
             deviceInfoTextBox.Font = new Font("Consolas", 9F);
             deviceInfoTextBox.Text = "请点击下方目标设备列表中的一台 device 状态设备。";
-            panel.Controls.Add(deviceInfoTextBox, 0, 1);
-
-            deviceInfoToolTip.SetToolTip(connectAddressTextBox, "可输入 IP:端口，例如 192.168.1.100:5555；点击设备列表会同步设备 ID。");
+            panel.Controls.Add(deviceInfoTextBox, 0, 0);
         }
 
         private void BuildDisplayControlTab()
@@ -1132,22 +1102,28 @@ namespace AdbTool
             parent.Controls.Add(devicePanel);
             var deviceHeader = new TableLayoutPanel();
             deviceHeader.Dock = DockStyle.Fill;
-            deviceHeader.ColumnCount = 2;
+            deviceHeader.ColumnCount = 3;
             deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+            deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             devicePanel.Controls.Add(deviceHeader, 0, 0);
             var deviceLabel = new Label();
             deviceLabel.Text = "目标设备列表";
             deviceLabel.Dock = DockStyle.Fill;
             deviceLabel.TextAlign = ContentAlignment.MiddleLeft;
             deviceHeader.Controls.Add(deviceLabel, 0, 0);
+            connectButton.Text = "连接设备";
+            connectButton.Dock = DockStyle.Fill;
+            connectButton.Margin = new Padding(4, 2, 4, 2);
+            deviceHeader.Controls.Add(connectButton, 1, 0);
             refreshButton.Text = "刷新";
             refreshButton.Dock = DockStyle.Fill;
             refreshButton.Margin = new Padding(4, 2, 4, 2);
-            deviceHeader.Controls.Add(refreshButton, 1, 0);
+            deviceHeader.Controls.Add(refreshButton, 2, 0);
             deviceList.Dock = DockStyle.Fill;
             deviceList.CheckOnClick = true;
             devicePanel.Controls.Add(deviceList, 0, 1);
+            deviceInfoToolTip.SetToolTip(connectButton, "打开设备连接窗口，输入无线 ADB 地址后连接或断连。");
         }
 
         private void BuildSharedLogArea(Control parent)
@@ -1205,8 +1181,7 @@ namespace AdbTool
             browseButton.Click += delegate { BrowseApk(); };
             refreshButton.Click += delegate { RefreshDevices(true); };
             settingsButton.Click += delegate { ShowToolSettingsDialog(); };
-            connectButton.Click += delegate { ConnectDevice(); };
-            disconnectButton.Click += delegate { DisconnectDevice(); };
+            connectButton.Click += delegate { ShowDeviceConnectionDialog(); };
             clearLogButton.Click += delegate { logBox.Clear(); };
             installButton.Click += delegate { StartExecution(); };
             cancelButton.Click += delegate { RequestCancel(); };
@@ -1218,8 +1193,7 @@ namespace AdbTool
             startAppModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             tabControl.SelectedIndexChanged += delegate { UpdateDisplayControlAutoRefreshState(); BeginDeviceInfoAutoRefresh(false); };
             deviceList.SelectedIndexChanged += delegate { OnDeviceListSelectionChanged(); };
-            deviceList.ItemCheck += delegate { BeginSyncAddressFromCurrentDevice(); BeginDisplayControlAutoRefresh(); };
-            deviceList.Click += delegate { BeginSyncAddressFromCurrentDevice(); };
+            deviceList.ItemCheck += delegate { BeginDisplayControlAutoRefresh(); };
             deviceList.MouseUp += delegate(object sender, MouseEventArgs e) { OnDeviceListMouseUp(e); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
@@ -2862,8 +2836,6 @@ namespace AdbTool
             var busy = running || isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning;
             browseButton.Enabled = !busy;
             connectButton.Enabled = !busy;
-            disconnectButton.Enabled = !busy;
-            connectAddressTextBox.Enabled = !busy;
             installButton.Enabled = !busy;
             installModeRadioButton.Enabled = !busy;
             cleanInstallModeRadioButton.Enabled = !busy;
@@ -3415,8 +3387,6 @@ namespace AdbTool
             refreshButton.Enabled = !busy;
             settingsButton.Enabled = !busy;
             connectButton.Enabled = !busy;
-            disconnectButton.Enabled = !busy;
-            connectAddressTextBox.Enabled = !busy;
             installButton.Enabled = !busy;
             clearLogButton.Enabled = !busy;
             installModeRadioButton.Enabled = !busy;
@@ -3796,7 +3766,6 @@ namespace AdbTool
 
         private void OnDeviceListSelectionChanged()
         {
-            BeginSyncAddressFromCurrentDevice();
             BeginDisplayControlAutoRefresh();
             BeginDeviceInfoAutoRefresh(false);
         }
@@ -3807,12 +3776,9 @@ namespace AdbTool
             var index = deviceList.IndexFromPoint(e.Location);
             if (index < 0 || index >= deviceList.Items.Count) return;
             if (deviceList.SelectedIndex != index) deviceList.SelectedIndex = index;
-            BeginSyncAddressFromCurrentDevice();
             BeginDisplayControlAutoRefresh();
             BeginDeviceInfoAutoRefresh(true);
         }
-
-        private void BeginSyncAddressFromCurrentDevice() { BeginInvokeIfNeeded(delegate { FillAddressFromCurrentDevice(); }); }
 
         private void BrowseApk()
         {
@@ -3830,31 +3796,116 @@ namespace AdbTool
             }
         }
 
-        private void ConnectDevice()
+        private void ShowDeviceConnectionDialog()
         {
-            var address = NormalizeAdbAddress(connectAddressTextBox.Text.Trim());
-            if (address == null)
-            {
-                MessageBox.Show(this, "请输入设备地址，例如 192.168.1.100:5555。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            RunDeviceCommand("连接设备", new[] { "connect", address });
-        }
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
 
-        private void DisconnectDevice()
-        {
-            var address = connectAddressTextBox.Text.Trim();
-            if (string.IsNullOrWhiteSpace(address) && deviceList.SelectedItem != null)
+            using (var dialog = new Form())
+            using (var dialogToolTip = new ToolTip())
             {
-                DeviceInfo device;
-                if (deviceMap.TryGetValue(deviceList.SelectedItem.ToString(), out device)) address = device.Serial;
+                dialog.Text = "连接设备";
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ShowInTaskbar = false;
+                dialog.ClientSize = new Size(560, 172);
+                dialog.Font = Font;
+
+                var panel = new TableLayoutPanel();
+                panel.Dock = DockStyle.Fill;
+                panel.Padding = new Padding(12);
+                panel.ColumnCount = 1;
+                panel.RowCount = 3;
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+                panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+                dialog.Controls.Add(panel);
+
+                var addressPanel = new TableLayoutPanel();
+                addressPanel.Dock = DockStyle.Fill;
+                addressPanel.ColumnCount = 2;
+                addressPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+                addressPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                panel.Controls.Add(addressPanel, 0, 0);
+
+                var addressLabel = new Label();
+                addressLabel.Text = "设备地址";
+                addressLabel.Dock = DockStyle.Fill;
+                addressLabel.TextAlign = ContentAlignment.MiddleLeft;
+                addressPanel.Controls.Add(addressLabel, 0, 0);
+
+                var addressTextBox = new TextBox();
+                addressTextBox.Dock = DockStyle.Fill;
+                addressTextBox.Margin = new Padding(0, 4, 0, 4);
+                addressTextBox.Text = lastConnectAddress;
+                addressPanel.Controls.Add(addressTextBox, 1, 0);
+
+                var hintLabel = new Label();
+                hintLabel.Dock = DockStyle.Fill;
+                hintLabel.TextAlign = ContentAlignment.MiddleLeft;
+                hintLabel.ForeColor = Color.FromArgb(90, 90, 90);
+                hintLabel.Text = "可输入 IP:端口，例如 192.168.1.100:5555；省略端口时默认使用 5555。";
+                panel.Controls.Add(hintLabel, 0, 1);
+
+                var footerPanel = new TableLayoutPanel();
+                footerPanel.Dock = DockStyle.Fill;
+                footerPanel.ColumnCount = 4;
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+                footerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+                panel.Controls.Add(footerPanel, 0, 2);
+
+                var connectActionButton = new Button();
+                connectActionButton.Text = "连接设备";
+                connectActionButton.Dock = DockStyle.Fill;
+                connectActionButton.Margin = new Padding(0, 6, 8, 6);
+                footerPanel.Controls.Add(connectActionButton, 1, 0);
+
+                var disconnectActionButton = new Button();
+                disconnectActionButton.Text = "断连设备";
+                disconnectActionButton.Dock = DockStyle.Fill;
+                disconnectActionButton.Margin = new Padding(0, 6, 8, 6);
+                footerPanel.Controls.Add(disconnectActionButton, 2, 0);
+
+                var cancelActionButton = new Button();
+                cancelActionButton.Text = "取消";
+                cancelActionButton.Dock = DockStyle.Fill;
+                cancelActionButton.Margin = new Padding(0, 6, 0, 6);
+                cancelActionButton.DialogResult = DialogResult.Cancel;
+                footerPanel.Controls.Add(cancelActionButton, 3, 0);
+
+                dialog.AcceptButton = connectActionButton;
+                dialog.CancelButton = cancelActionButton;
+                dialogToolTip.SetToolTip(addressTextBox, "可粘贴 adb connect 192.168.1.100:5555，工具会自动提取地址。");
+
+                string commandTitle = null;
+                string[] commandArgs = null;
+                Action<string, string> prepareCommand = delegate(string title, string adbCommand)
+                {
+                    var address = NormalizeAdbAddress(addressTextBox.Text);
+                    if (address == null)
+                    {
+                        MessageBox.Show(dialog, "请输入设备地址，例如 192.168.1.100:5555。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        addressTextBox.Focus();
+                        addressTextBox.SelectAll();
+                        return;
+                    }
+
+                    lastConnectAddress = address;
+                    commandTitle = title;
+                    commandArgs = new[] { adbCommand, address };
+                    dialog.DialogResult = DialogResult.OK;
+                    dialog.Close();
+                };
+
+                connectActionButton.Click += delegate { prepareCommand("连接设备", "connect"); };
+                disconnectActionButton.Click += delegate { prepareCommand("断连设备", "disconnect"); };
+                dialog.Shown += delegate { addressTextBox.Focus(); addressTextBox.SelectAll(); };
+
+                if (dialog.ShowDialog(this) == DialogResult.OK && commandArgs != null) RunDeviceCommand(commandTitle, commandArgs);
             }
-            if (string.IsNullOrWhiteSpace(address))
-            {
-                MessageBox.Show(this, "请输入要断连的设备地址，或在目标设备列表中选中一个设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            RunDeviceCommand("断连设备", new[] { "disconnect", address });
         }
 
         private void RunDeviceCommand(string title, string[] adbArgs)
@@ -3893,10 +3944,8 @@ namespace AdbTool
             var busy = running || isExecuting || isLogcatRunning || IsMediaCaptureRunning;
             browseButton.Enabled = !busy;
             connectButton.Enabled = !busy;
-            disconnectButton.Enabled = !busy;
             refreshButton.Enabled = !busy;
             settingsButton.Enabled = !busy;
-            connectAddressTextBox.Enabled = !busy;
             cancelButton.Enabled = running || isExecuting || IsMediaCaptureRunning;
             installButton.Enabled = !busy;
             installModeRadioButton.Enabled = !busy;
@@ -3943,15 +3992,6 @@ namespace AdbTool
             if (input.StartsWith("adb disconnect ", StringComparison.OrdinalIgnoreCase)) input = input.Substring("adb disconnect ".Length).Trim();
             if (!input.Contains(":")) input += ":5555";
             return Regex.IsMatch(input, @"^[A-Za-z0-9_.-]+:\d{1,5}$") ? input : null;
-        }
-
-        private void FillAddressFromCurrentDevice()
-        {
-            var label = deviceList.SelectedItem as string;
-            if (label == null && deviceList.CheckedItems.Count > 0) label = deviceList.CheckedItems[deviceList.CheckedItems.Count - 1].ToString();
-            if (label == null) return;
-            DeviceInfo device;
-            if (deviceMap.TryGetValue(label, out device)) connectAddressTextBox.Text = device.Serial;
         }
 
         private void OnDragEnter(object sender, DragEventArgs e) { e.Effect = GetDroppedApkPath(e.Data) == null ? DragDropEffects.None : DragDropEffects.Copy; }
@@ -5107,8 +5147,6 @@ namespace AdbTool
             refreshButton.Enabled = !busy;
             settingsButton.Enabled = !busy;
             connectButton.Enabled = !busy;
-            disconnectButton.Enabled = !busy;
-            connectAddressTextBox.Enabled = !busy;
             installButton.Enabled = !busy;
             clearLogButton.Enabled = !busy;
             installModeRadioButton.Enabled = !busy;
@@ -5157,8 +5195,6 @@ namespace AdbTool
             refreshButton.Enabled = !busy;
             settingsButton.Enabled = !busy;
             connectButton.Enabled = !busy;
-            disconnectButton.Enabled = !busy;
-            connectAddressTextBox.Enabled = !busy;
             installButton.Enabled = !busy;
             clearLogButton.Enabled = !busy;
             installModeRadioButton.Enabled = !busy;
