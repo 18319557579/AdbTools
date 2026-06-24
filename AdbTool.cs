@@ -1132,9 +1132,8 @@ namespace AdbTool
             parent.Controls.Add(devicePanel);
             var deviceHeader = new TableLayoutPanel();
             deviceHeader.Dock = DockStyle.Fill;
-            deviceHeader.ColumnCount = 3;
+            deviceHeader.ColumnCount = 2;
             deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             deviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
             devicePanel.Controls.Add(deviceHeader, 0, 0);
             var deviceLabel = new Label();
@@ -1142,14 +1141,10 @@ namespace AdbTool
             deviceLabel.Dock = DockStyle.Fill;
             deviceLabel.TextAlign = ContentAlignment.MiddleLeft;
             deviceHeader.Controls.Add(deviceLabel, 0, 0);
-            settingsButton.Text = "设置...";
-            settingsButton.Dock = DockStyle.Fill;
-            settingsButton.Margin = new Padding(4, 2, 4, 2);
-            deviceHeader.Controls.Add(settingsButton, 1, 0);
             refreshButton.Text = "刷新";
             refreshButton.Dock = DockStyle.Fill;
             refreshButton.Margin = new Padding(4, 2, 4, 2);
-            deviceHeader.Controls.Add(refreshButton, 2, 0);
+            deviceHeader.Controls.Add(refreshButton, 1, 0);
             deviceList.Dock = DockStyle.Fill;
             deviceList.CheckOnClick = true;
             devicePanel.Controls.Add(deviceList, 0, 1);
@@ -1163,7 +1158,7 @@ namespace AdbTool
             logPanel.RowCount = 3;
             logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             logPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            logPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             parent.Controls.Add(logPanel);
 
             var logHeader = new TableLayoutPanel();
@@ -1188,10 +1183,21 @@ namespace AdbTool
             logBox.ReadOnly = true;
             logBox.Font = new Font("Consolas", 9F);
             logPanel.Controls.Add(logBox, 0, 1);
+
+            var logFooter = new TableLayoutPanel();
+            logFooter.Dock = DockStyle.Fill;
+            logFooter.ColumnCount = 2;
+            logFooter.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            logFooter.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            logPanel.Controls.Add(logFooter, 0, 2);
             statusLabel.Dock = DockStyle.Fill;
             statusLabel.TextAlign = ContentAlignment.MiddleLeft;
             statusLabel.Text = "就绪";
-            logPanel.Controls.Add(statusLabel, 0, 2);
+            logFooter.Controls.Add(statusLabel, 0, 0);
+            settingsButton.Text = "配置";
+            settingsButton.Dock = DockStyle.Fill;
+            settingsButton.Margin = new Padding(8, 3, 0, 3);
+            logFooter.Controls.Add(settingsButton, 1, 0);
         }
 
         private void WireEvents()
