@@ -118,6 +118,7 @@ namespace AdbTool
         private readonly TextBox logBox = new TextBox();
 
         private readonly TextBox deviceInfoTextBox = new TextBox();
+        private readonly Button queryDeviceInfoButton = new Button();
         private readonly ToolTip deviceInfoToolTip = new ToolTip();
 
         private readonly TextBox logRecordPathTextBox = new TextBox();
@@ -412,9 +413,28 @@ namespace AdbTool
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Fill;
             panel.ColumnCount = 1;
-            panel.RowCount = 1;
+            panel.RowCount = 2;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             deviceInfoTab.Controls.Add(panel);
+
+            var actionPanel = new TableLayoutPanel();
+            actionPanel.Dock = DockStyle.Fill;
+            actionPanel.ColumnCount = 2;
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            panel.Controls.Add(actionPanel, 0, 0);
+
+            var hintLabel = new Label();
+            hintLabel.Text = "勾选一台 device 状态的目标设备后点击查询。";
+            hintLabel.Dock = DockStyle.Fill;
+            hintLabel.TextAlign = ContentAlignment.MiddleLeft;
+            hintLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            hintLabel.AutoEllipsis = true;
+            actionPanel.Controls.Add(hintLabel, 0, 0);
+
+            queryDeviceInfoButton.Text = "查询";
+            AddActionButton(actionPanel, queryDeviceInfoButton, 1);
 
             deviceInfoTextBox.Dock = DockStyle.Fill;
             deviceInfoTextBox.Multiline = true;
@@ -422,8 +442,9 @@ namespace AdbTool
             deviceInfoTextBox.WordWrap = false;
             deviceInfoTextBox.ReadOnly = true;
             deviceInfoTextBox.Font = new Font("Consolas", 9F);
-            deviceInfoTextBox.Text = "请点击下方目标设备列表中的一台 device 状态设备。";
-            panel.Controls.Add(deviceInfoTextBox, 0, 0);
+            deviceInfoTextBox.Text = "请在下方目标设备列表中勾选一台 device 状态设备，然后点击查询。";
+            panel.Controls.Add(deviceInfoTextBox, 0, 1);
+            deviceInfoToolTip.SetToolTip(queryDeviceInfoButton, "读取勾选设备的系统、硬件、电池、存储和网络信息。");
         }
 
         private void BuildDisplayControlTab()
@@ -1191,10 +1212,11 @@ namespace AdbTool
             uninstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             clearDataModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             startAppModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            tabControl.SelectedIndexChanged += delegate { UpdateDisplayControlAutoRefreshState(); BeginDeviceInfoAutoRefresh(false); };
+            tabControl.SelectedIndexChanged += delegate { UpdateDisplayControlAutoRefreshState(); };
             deviceList.SelectedIndexChanged += delegate { OnDeviceListSelectionChanged(); };
             deviceList.ItemCheck += delegate { BeginDisplayControlAutoRefresh(); };
             deviceList.MouseUp += delegate(object sender, MouseEventArgs e) { OnDeviceListMouseUp(e); };
+            queryDeviceInfoButton.Click += delegate { StartDeviceInfoRefresh(); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
             clearLogcatCacheButton.Click += delegate { ClearLogcatCache(); };
@@ -1413,42 +1435,17 @@ namespace AdbTool
             }
         }
 
-        private void BeginDeviceInfoAutoRefresh()
+        private void StartDeviceInfoRefresh()
         {
-            BeginDeviceInfoAutoRefresh(false);
-        }
-
-        private void BeginDeviceInfoAutoRefresh(bool force)
-        {
-            if (IsDisposed) return;
-            try { BeginInvoke(new Action(delegate { StartDeviceInfoRefresh(true, force); })); } catch { }
-        }
-
-        private void StartDeviceInfoRefresh(bool automatic, bool force)
-        {
-            if (automatic && tabControl.SelectedTab != deviceInfoTab) return;
             if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
 
-            DeviceInfo device;
-            if (automatic)
-            {
-                if (!TryGetSelectedDeviceForDeviceInfo(out device))
-                {
-                    if (deviceList.SelectedItem != null) statusLabel.Text = "请选择状态为 device 的设备。";
-                    return;
-                }
-                if (!force && string.Equals(currentDeviceInfoSerial, device.Serial, StringComparison.Ordinal) && deviceInfoTextBox.TextLength > 0) return;
-            }
-            else
-            {
-                device = GetSelectedDeviceForDeviceInfo();
-                if (device == null) return;
-            }
+            var device = GetSingleCheckedDeviceForDeviceInfo();
+            if (device == null) return;
 
             var adb = FindAdb();
             if (adb == null)
             {
-                HandleMissingAdb(!automatic);
+                HandleMissingAdb(true);
                 return;
             }
 
@@ -1458,7 +1455,6 @@ namespace AdbTool
             statusLabel.Text = "正在读取设备信息...";
             AddLogLine("读取设备信息：" + device.Serial);
             var serial = device.Serial;
-            var deviceLabel = device.Label;
             var thread = new Thread(new ThreadStart(delegate
             {
                 var error = "";
@@ -1469,11 +1465,6 @@ namespace AdbTool
                     BeginInvokeIfNeeded(delegate
                     {
                         var canceled = cancelRequested || string.Equals(error, "Canceled", StringComparison.Ordinal);
-                        if (automatic)
-                        {
-                            DeviceInfo currentDevice;
-                            if (tabControl.SelectedTab != deviceInfoTab || !TryGetSelectedDeviceForDeviceInfo(out currentDevice) || !string.Equals(currentDevice.Serial, serial, StringComparison.Ordinal)) return;
-                        }
                         if (canceled)
                         {
                             statusLabel.Text = "设备信息读取已中止。";
@@ -1510,16 +1501,31 @@ namespace AdbTool
             thread.Start();
         }
 
-        private DeviceInfo GetSelectedDeviceForDeviceInfo()
+        private DeviceInfo GetSingleCheckedDeviceForDeviceInfo()
         {
-            var label = GetDeviceInfoTargetLabel();
-            if (string.IsNullOrWhiteSpace(label))
+            return GetSingleCheckedDevice("设备概览");
+        }
+
+        private bool TryGetSingleCheckedDeviceForDeviceInfo(out DeviceInfo device)
+        {
+            return TryGetSingleCheckedDevice(out device);
+        }
+
+        private DeviceInfo GetSingleCheckedDevice(string actionName)
+        {
+            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
+            if (checkedItems.Count == 0)
             {
-                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请先在目标设备列表中勾选一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            if (checkedItems.Count > 1)
+            {
+                MessageBox.Show(this, actionName + "一次只能选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             DeviceInfo device;
-            if (!deviceMap.TryGetValue(label, out device) || device.State != "device")
+            if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
             {
                 MessageBox.Show(this, "请选择状态为 device 的设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
@@ -1527,20 +1533,12 @@ namespace AdbTool
             return device;
         }
 
-        private bool TryGetSelectedDeviceForDeviceInfo(out DeviceInfo device)
+        private bool TryGetSingleCheckedDevice(out DeviceInfo device)
         {
             device = null;
-            var label = GetDeviceInfoTargetLabel();
-            if (string.IsNullOrWhiteSpace(label)) return false;
-            return deviceMap.TryGetValue(label, out device) && device.State == "device";
-        }
-
-        private string GetDeviceInfoTargetLabel()
-        {
-            var label = deviceList.SelectedItem as string;
-            if (!string.IsNullOrWhiteSpace(label)) return label;
-            if (deviceList.CheckedItems.Count == 1) return deviceList.CheckedItems[0].ToString();
-            return null;
+            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
+            if (checkedItems.Count != 1) return false;
+            return deviceMap.TryGetValue(checkedItems[0], out device) && device.State == "device";
         }
 
         private string BuildDeviceInfoReport(string adb, DeviceInfo device, out string error)
@@ -2039,26 +2037,8 @@ namespace AdbTool
 
         private DeviceInfo GetSingleCheckedDeviceForDisplayControl()
         {
-            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
-            if (checkedItems.Count == 0)
-            {
-                ClearDisplayControlInfo();
-                MessageBox.Show(this, "请先在目标设备列表中选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return null;
-            }
-            if (checkedItems.Count > 1)
-            {
-                ClearDisplayControlInfo();
-                MessageBox.Show(this, "显示控制一次只能选择一台设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return null;
-            }
-            DeviceInfo device;
-            if (!deviceMap.TryGetValue(checkedItems[0], out device) || device.State != "device")
-            {
-                ClearDisplayControlInfo();
-                MessageBox.Show(this, "请选择状态为 device 的设备。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return null;
-            }
+            var device = GetSingleCheckedDevice("显示控制");
+            if (device == null) ClearDisplayControlInfo();
             return device;
         }
 
@@ -2071,10 +2051,7 @@ namespace AdbTool
 
         private bool TryGetSingleCheckedDeviceForDisplayControl(out DeviceInfo device)
         {
-            device = null;
-            var checkedItems = deviceList.CheckedItems.Cast<object>().Select(o => o.ToString()).ToList();
-            if (checkedItems.Count != 1) return false;
-            return deviceMap.TryGetValue(checkedItems[0], out device) && device.State == "device";
+            return TryGetSingleCheckedDevice(out device);
         }
 
         private DisplayControlInfo ReadDisplayControlInfo(string adb, string serial, bool cancellable)
@@ -2831,6 +2808,11 @@ namespace AdbTool
             restoreDensityButton.Enabled = enabled;
         }
 
+        private void SetDeviceInfoControlsEnabled(bool enabled)
+        {
+            queryDeviceInfoButton.Enabled = enabled;
+        }
+
         private void SetLogcatUi(bool running)
         {
             var busy = running || isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning;
@@ -2869,6 +2851,7 @@ namespace AdbTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             refreshButton.Enabled = !busy;
             settingsButton.Enabled = !busy;
@@ -3422,6 +3405,7 @@ namespace AdbTool
             stopScreenRecordButton.Enabled = running && !screenRecordStopRequested;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenshotRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
@@ -3767,7 +3751,6 @@ namespace AdbTool
         private void OnDeviceListSelectionChanged()
         {
             BeginDisplayControlAutoRefresh();
-            BeginDeviceInfoAutoRefresh(false);
         }
 
         private void OnDeviceListMouseUp(MouseEventArgs e)
@@ -3777,7 +3760,6 @@ namespace AdbTool
             if (index < 0 || index >= deviceList.Items.Count) return;
             if (deviceList.SelectedIndex != index) deviceList.SelectedIndex = index;
             BeginDisplayControlAutoRefresh();
-            BeginDeviceInfoAutoRefresh(true);
         }
 
         private void BrowseApk()
@@ -3979,6 +3961,7 @@ namespace AdbTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             deviceList.Enabled = !busy;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
@@ -4740,7 +4723,7 @@ namespace AdbTool
             if (isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning) return;
             var previousSerial = currentDeviceInfoSerial;
             DeviceInfo selectedDevice;
-            if (TryGetSelectedDeviceForDeviceInfo(out selectedDevice)) previousSerial = selectedDevice.Serial;
+            if (TryGetSingleCheckedDeviceForDeviceInfo(out selectedDevice)) previousSerial = selectedDevice.Serial;
             deviceList.Items.Clear();
             deviceMap.Clear();
             var adb = FindAdb();
@@ -4758,11 +4741,10 @@ namespace AdbTool
             else if (!string.IsNullOrEmpty(currentDeviceInfoSerial))
             {
                 currentDeviceInfoSerial = "";
-                deviceInfoTextBox.Text = "请点击下方目标设备列表中的一台 device 状态设备。";
+                deviceInfoTextBox.Text = "请在下方目标设备列表中勾选一台 device 状态设备，然后点击查询。";
             }
             statusLabel.Text = "检测到 " + devices.Count + " 台设备，可用 " + devices.Count(d => d.State == "device") + " 台。";
             BeginDisplayControlAutoRefresh();
-            BeginDeviceInfoAutoRefresh();
         }
 
         private List<DeviceInfo> GetConnectedDevices(string adb)
@@ -5182,6 +5164,7 @@ namespace AdbTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             cancelButton.Enabled = executing || isDeviceCommandRunning || IsMediaCaptureRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
@@ -5230,6 +5213,7 @@ namespace AdbTool
             stopScreenRecordButton.Enabled = isScreenRecordRunning;
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
+            SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenRecordRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
