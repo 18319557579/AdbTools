@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -29,6 +30,10 @@ namespace AdbTool
         private const string ConfigFileName = "adb-tool.config.json";
         private const string RunLogPrefix = "adb-tool";
         private const string RemoteTempFilePrefix = "adb-tool";
+        private const int DisplayScaleTrackBarMaximum = 100;
+        private const int DisplayScaleTrackBarDefaultValue = 25;
+        private const double DisplayScaleStep = 0.04;
+        private const double DefaultDisplayScale = 1.0;
 
         private enum TransferDirection
         {
@@ -58,10 +63,22 @@ namespace AdbTool
             public int OverrideHeight;
             public int PhysicalDensity;
             public int OverrideDensity;
+            public double FontScale = DefaultDisplayScale;
+            public double WindowAnimationScale = DefaultDisplayScale;
+            public double TransitionAnimationScale = DefaultDisplayScale;
+            public double AnimatorDurationScale = DefaultDisplayScale;
             public bool HasPhysicalSize;
             public bool HasOverrideSize;
             public bool HasPhysicalDensity;
             public bool HasOverrideDensity;
+            public bool HasFontScale;
+            public bool HasWindowAnimationScale;
+            public bool HasTransitionAnimationScale;
+            public bool HasAnimatorDurationScale;
+            public bool IsFontScaleUnset;
+            public bool IsWindowAnimationScaleUnset;
+            public bool IsTransitionAnimationScaleUnset;
+            public bool IsAnimatorDurationScaleUnset;
 
             public bool HasCurrentSize
             {
@@ -167,16 +184,30 @@ namespace AdbTool
 
         private readonly Label displayResolutionInfoLabel = new Label();
         private readonly Label displayDensityInfoLabel = new Label();
+        private readonly Label displayFontScaleInfoLabel = new Label();
+        private readonly Label displayAnimationScaleInfoLabel = new Label();
         private readonly Label displayControlStatusLabel = new Label();
         private readonly TextBox displayWidthTextBox = new TextBox();
         private readonly TextBox displayHeightTextBox = new TextBox();
         private readonly TextBox displayDensityValueTextBox = new TextBox();
         private readonly ComboBox displayDensityUnitComboBox = new ComboBox();
+        private readonly TrackBar displayFontScaleTrackBar = new TrackBar();
+        private readonly TrackBar windowAnimationScaleTrackBar = new TrackBar();
+        private readonly TrackBar transitionAnimationScaleTrackBar = new TrackBar();
+        private readonly TrackBar animatorDurationScaleTrackBar = new TrackBar();
+        private readonly Label displayFontScaleValueLabel = new Label();
+        private readonly Label windowAnimationScaleValueLabel = new Label();
+        private readonly Label transitionAnimationScaleValueLabel = new Label();
+        private readonly Label animatorDurationScaleValueLabel = new Label();
         private readonly Button refreshDisplayInfoButton = new Button();
         private readonly Button applyResolutionButton = new Button();
         private readonly Button restoreResolutionButton = new Button();
         private readonly Button applyDensityButton = new Button();
         private readonly Button restoreDensityButton = new Button();
+        private readonly Button applyFontScaleButton = new Button();
+        private readonly Button restoreFontScaleButton = new Button();
+        private readonly Button applyAnimationScaleButton = new Button();
+        private readonly Button restoreAnimationScaleButton = new Button();
         private readonly Button restoreDisplayAllButton = new Button();
         private readonly ToolTip displayControlToolTip = new ToolTip();
         private readonly System.Windows.Forms.Timer displayControlRefreshTimer = new System.Windows.Forms.Timer();
@@ -450,16 +481,14 @@ namespace AdbTool
         private void BuildDisplayControlTab()
         {
             displayControlTab.Padding = new Padding(10);
+            displayControlTab.AutoScroll = true;
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Top;
-            panel.Height = 240;
+            panel.Height = 390;
             panel.ColumnCount = 1;
-            panel.RowCount = 6;
+            panel.RowCount = 3;
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 314));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             displayControlTab.Controls.Add(panel);
 
@@ -471,36 +500,51 @@ namespace AdbTool
             topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
             topPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
             panel.Controls.Add(topPanel, 0, 0);
-            var title = new Label();
-            title.Text = "显示控制";
-            title.Dock = DockStyle.Fill;
-            title.TextAlign = ContentAlignment.MiddleLeft;
-            topPanel.Controls.Add(title, 0, 0);
             refreshDisplayInfoButton.Text = "读取信息";
             AddActionButton(topPanel, refreshDisplayInfoButton, 1);
             restoreDisplayAllButton.Text = "全部恢复";
             AddActionButton(topPanel, restoreDisplayAllButton, 2);
 
-            displayResolutionInfoLabel.Text = "屏幕分辨率：请选择一台 device 状态的设备后读取。";
+            var contentPanel = new TableLayoutPanel();
+            contentPanel.Dock = DockStyle.Fill;
+            contentPanel.ColumnCount = 2;
+            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 49));
+            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 51));
+            contentPanel.RowCount = 1;
+            panel.Controls.Add(contentPanel, 0, 1);
+
+            var leftPanel = new TableLayoutPanel();
+            leftPanel.Dock = DockStyle.Fill;
+            leftPanel.Margin = new Padding(0, 0, 12, 0);
+            leftPanel.ColumnCount = 1;
+            leftPanel.RowCount = 5;
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            contentPanel.Controls.Add(leftPanel, 0, 0);
+
+            displayResolutionInfoLabel.Text = "屏幕分辨率";
             displayResolutionInfoLabel.Dock = DockStyle.Fill;
             displayResolutionInfoLabel.TextAlign = ContentAlignment.MiddleLeft;
             displayResolutionInfoLabel.ForeColor = Color.FromArgb(60, 60, 60);
             displayResolutionInfoLabel.AutoEllipsis = true;
-            panel.Controls.Add(displayResolutionInfoLabel, 0, 1);
+            leftPanel.Controls.Add(displayResolutionInfoLabel, 0, 0);
 
             var resolutionPanel = new TableLayoutPanel();
             resolutionPanel.Dock = DockStyle.Fill;
             resolutionPanel.ColumnCount = 9;
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(resolutionPanel, 0, 2);
+            leftPanel.Controls.Add(resolutionPanel, 0, 1);
             AddLabel(resolutionPanel, "横向像素", 0);
             displayWidthTextBox.Dock = DockStyle.Fill;
             displayWidthTextBox.Margin = new Padding(0, 4, 8, 4);
@@ -516,24 +560,24 @@ namespace AdbTool
             AddActionButton(resolutionPanel, applyResolutionButton, 6);
             AddActionButton(resolutionPanel, restoreResolutionButton, 7);
 
-            displayDensityInfoLabel.Text = "显示密度：请选择一台 device 状态的设备后读取。";
+            displayDensityInfoLabel.Text = "显示密度";
             displayDensityInfoLabel.Dock = DockStyle.Fill;
             displayDensityInfoLabel.TextAlign = ContentAlignment.MiddleLeft;
             displayDensityInfoLabel.ForeColor = Color.FromArgb(60, 60, 60);
             displayDensityInfoLabel.AutoEllipsis = true;
-            panel.Controls.Add(displayDensityInfoLabel, 0, 3);
+            leftPanel.Controls.Add(displayDensityInfoLabel, 0, 2);
 
             var densityPanel = new TableLayoutPanel();
             densityPanel.Dock = DockStyle.Fill;
             densityPanel.ColumnCount = 7;
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
-            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
+            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
             densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 16));
             densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(densityPanel, 0, 4);
+            leftPanel.Controls.Add(densityPanel, 0, 3);
             AddLabel(densityPanel, "密度/宽度", 0);
             displayDensityValueTextBox.Dock = DockStyle.Fill;
             displayDensityValueTextBox.Margin = new Padding(0, 4, 8, 4);
@@ -549,19 +593,77 @@ namespace AdbTool
             AddActionButton(densityPanel, applyDensityButton, 3);
             AddActionButton(densityPanel, restoreDensityButton, 4);
 
-            displayControlStatusLabel.Text = "修改显示参数可能会短暂刷新设备画面；异常时可使用恢复按钮。";
+            var scalePanel = new TableLayoutPanel();
+            scalePanel.Dock = DockStyle.Fill;
+            scalePanel.ColumnCount = 1;
+            scalePanel.RowCount = 8;
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            scalePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            contentPanel.Controls.Add(scalePanel, 1, 0);
+
+            displayFontScaleInfoLabel.Text = "字体大小倍数";
+            displayFontScaleInfoLabel.Dock = DockStyle.Fill;
+            displayFontScaleInfoLabel.TextAlign = ContentAlignment.MiddleLeft;
+            displayFontScaleInfoLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            displayFontScaleInfoLabel.AutoEllipsis = true;
+            scalePanel.Controls.Add(displayFontScaleInfoLabel, 0, 0);
+
+            ConfigureDisplayScaleTrackBar(displayFontScaleTrackBar);
+            ConfigureDisplayScaleValueLabel(displayFontScaleValueLabel);
+            applyFontScaleButton.Text = "修改";
+            restoreFontScaleButton.Text = "恢复";
+            scalePanel.Controls.Add(CreateDisplayScaleRow("缩放", displayFontScaleTrackBar, displayFontScaleValueLabel, applyFontScaleButton, restoreFontScaleButton), 0, 1);
+            scalePanel.Controls.Add(CreateDisplayScaleMarkerPanel(), 0, 2);
+
+            displayAnimationScaleInfoLabel.Text = "动画速度";
+            displayAnimationScaleInfoLabel.Dock = DockStyle.Fill;
+            displayAnimationScaleInfoLabel.TextAlign = ContentAlignment.MiddleLeft;
+            displayAnimationScaleInfoLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            displayAnimationScaleInfoLabel.AutoEllipsis = true;
+            scalePanel.Controls.Add(displayAnimationScaleInfoLabel, 0, 3);
+
+            ConfigureDisplayScaleTrackBar(windowAnimationScaleTrackBar);
+            ConfigureDisplayScaleTrackBar(transitionAnimationScaleTrackBar);
+            ConfigureDisplayScaleTrackBar(animatorDurationScaleTrackBar);
+            ConfigureDisplayScaleValueLabel(windowAnimationScaleValueLabel);
+            ConfigureDisplayScaleValueLabel(transitionAnimationScaleValueLabel);
+            ConfigureDisplayScaleValueLabel(animatorDurationScaleValueLabel);
+            applyAnimationScaleButton.Text = "修改";
+            restoreAnimationScaleButton.Text = "恢复";
+            scalePanel.Controls.Add(CreateDisplayScaleRow("窗口", windowAnimationScaleTrackBar, windowAnimationScaleValueLabel, applyAnimationScaleButton, restoreAnimationScaleButton), 0, 4);
+            scalePanel.Controls.Add(CreateDisplayScaleRow("过渡", transitionAnimationScaleTrackBar, transitionAnimationScaleValueLabel, null, null), 0, 5);
+            scalePanel.Controls.Add(CreateDisplayScaleRow("程序", animatorDurationScaleTrackBar, animatorDurationScaleValueLabel, null, null), 0, 6);
+            scalePanel.Controls.Add(CreateDisplayScaleMarkerPanel(), 0, 7);
+
+            displayControlStatusLabel.Text = "修改显示参数、字体倍数或动画速度可能会短暂刷新设备画面；异常时可使用恢复按钮。";
             displayControlStatusLabel.Dock = DockStyle.Fill;
             displayControlStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             displayControlStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
             displayControlStatusLabel.AutoEllipsis = true;
-            panel.Controls.Add(displayControlStatusLabel, 0, 5);
+            panel.Controls.Add(displayControlStatusLabel, 0, 2);
 
-            displayControlToolTip.SetToolTip(refreshDisplayInfoButton, "读取当前设备的 wm size 和 wm density。");
-            displayControlToolTip.SetToolTip(restoreDisplayAllButton, "依次执行 wm size reset 和 wm density reset。");
+            UpdateDisplayScaleValueLabels();
+
+            displayControlToolTip.SetToolTip(refreshDisplayInfoButton, "读取当前设备的 wm size、wm density、字体大小倍数和动画速度。");
+            displayControlToolTip.SetToolTip(restoreDisplayAllButton, "依次恢复分辨率、密度、字体大小倍数和动画速度。");
             displayControlToolTip.SetToolTip(applyResolutionButton, "执行 wm size 宽x高，单位为 px。");
             displayControlToolTip.SetToolTip(restoreResolutionButton, "执行 wm size reset。");
             displayControlToolTip.SetToolTip(applyDensityButton, "DPI 模式直接设置 density；dp 模式按最小宽度换算 density。");
             displayControlToolTip.SetToolTip(restoreDensityButton, "执行 wm density reset，同时恢复最小宽度表现。");
+            displayControlToolTip.SetToolTip(displayFontScaleTrackBar, "参考搞机工具箱的无级调节，范围 0x - 4x。");
+            displayControlToolTip.SetToolTip(applyFontScaleButton, "执行 settings put system font_scale。");
+            displayControlToolTip.SetToolTip(restoreFontScaleButton, "将 font_scale 恢复为 1x。");
+            displayControlToolTip.SetToolTip(windowAnimationScaleTrackBar, "窗口动画速度，范围 0x - 4x。");
+            displayControlToolTip.SetToolTip(transitionAnimationScaleTrackBar, "过渡动画速度，范围 0x - 4x。");
+            displayControlToolTip.SetToolTip(animatorDurationScaleTrackBar, "程序/Animator 动画速度，范围 0x - 4x。");
+            displayControlToolTip.SetToolTip(applyAnimationScaleButton, "依次设置窗口、过渡和程序动画速度。");
+            displayControlToolTip.SetToolTip(restoreAnimationScaleButton, "将三项动画速度恢复为 1x。");
         }
 
         private void BuildLogRecordTab()
@@ -959,6 +1061,88 @@ namespace AdbTool
             panel.Controls.Add(button, column, 0);
         }
 
+        private TableLayoutPanel CreateDisplayScaleRow(string labelText, TrackBar trackBar, Label valueLabel, Button applyButton, Button restoreButton)
+        {
+            var row = new TableLayoutPanel();
+            row.Dock = DockStyle.Fill;
+            row.ColumnCount = 5;
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 68));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+            AddLabel(row, labelText, 0);
+            row.Controls.Add(trackBar, 1, 0);
+            row.Controls.Add(valueLabel, 2, 0);
+            if (applyButton != null) AddActionButton(row, applyButton, 3);
+            if (restoreButton != null) AddActionButton(row, restoreButton, 4);
+            return row;
+        }
+
+        private TableLayoutPanel CreateDisplayScaleMarkerPanel()
+        {
+            var markerHost = new TableLayoutPanel();
+            markerHost.Dock = DockStyle.Fill;
+            markerHost.Margin = Padding.Empty;
+            markerHost.ColumnCount = 3;
+            markerHost.RowCount = 1;
+            markerHost.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
+            markerHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            markerHost.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 196));
+            markerHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var markers = new TableLayoutPanel();
+            markers.Dock = DockStyle.Fill;
+            markers.Margin = Padding.Empty;
+            markers.ColumnCount = 5;
+            markers.RowCount = 1;
+            for (var i = 0; i < 5; i++)
+            {
+                markers.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            }
+            markers.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            AddDisplayScaleMarkerLabel(markers, "0x", 0);
+            AddDisplayScaleMarkerLabel(markers, "1x", 1);
+            AddDisplayScaleMarkerLabel(markers, "2x", 2);
+            AddDisplayScaleMarkerLabel(markers, "3x", 3);
+            AddDisplayScaleMarkerLabel(markers, "4x", 4);
+            markerHost.Controls.Add(markers, 1, 0);
+            return markerHost;
+        }
+
+        private void AddDisplayScaleMarkerLabel(TableLayoutPanel panel, string text, int column)
+        {
+            var label = new Label();
+            label.Text = text;
+            label.Dock = DockStyle.Fill;
+            label.Margin = Padding.Empty;
+            label.TextAlign = ContentAlignment.MiddleCenter;
+            label.ForeColor = Color.FromArgb(90, 90, 90);
+            panel.Controls.Add(label, column, 0);
+        }
+
+        private void ConfigureDisplayScaleTrackBar(TrackBar trackBar)
+        {
+            trackBar.Dock = DockStyle.Fill;
+            trackBar.AutoSize = false;
+            trackBar.Height = 30;
+            trackBar.Minimum = 0;
+            trackBar.Maximum = DisplayScaleTrackBarMaximum;
+            trackBar.TickFrequency = 25;
+            trackBar.SmallChange = 1;
+            trackBar.LargeChange = 5;
+            trackBar.Value = DisplayScaleTrackBarDefaultValue;
+            trackBar.Margin = new Padding(0, 3, 8, 3);
+        }
+
+        private void ConfigureDisplayScaleValueLabel(Label label)
+        {
+            label.Dock = DockStyle.Fill;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+            label.ForeColor = Color.FromArgb(60, 60, 60);
+            label.AutoEllipsis = false;
+        }
+
         private bool ShowToolSettingsDialog()
         {
             using (var dialog = new Form())
@@ -1235,8 +1419,16 @@ namespace AdbTool
             restoreResolutionButton.Click += delegate { RestoreDisplayResolution(); };
             applyDensityButton.Click += delegate { ApplyDisplayDensity(); };
             restoreDensityButton.Click += delegate { RestoreDisplayDensity(); };
+            applyFontScaleButton.Click += delegate { ApplyDisplayFontScale(); };
+            restoreFontScaleButton.Click += delegate { RestoreDisplayFontScale(); };
+            applyAnimationScaleButton.Click += delegate { ApplyDisplayAnimationScale(); };
+            restoreAnimationScaleButton.Click += delegate { RestoreDisplayAnimationScale(); };
             restoreDisplayAllButton.Click += delegate { RestoreAllDisplaySettings(); };
             displayDensityUnitComboBox.SelectedIndexChanged += delegate { UpdateDisplayDensityValueForSelectedUnit(); };
+            displayFontScaleTrackBar.ValueChanged += delegate { UpdateDisplayScaleValueLabels(); };
+            windowAnimationScaleTrackBar.ValueChanged += delegate { UpdateDisplayScaleValueLabels(); };
+            transitionAnimationScaleTrackBar.ValueChanged += delegate { UpdateDisplayScaleValueLabels(); };
+            animatorDurationScaleTrackBar.ValueChanged += delegate { UpdateDisplayScaleValueLabels(); };
             browseScreenshotOutputDirButton.Click += delegate { BrowseScreenshotOutputDir(); };
             takeScreenshotButton.Click += delegate { StartScreenshot(); };
             startScreenRecordButton.Click += delegate { StartScreenRecording(); };
@@ -1988,6 +2180,61 @@ namespace AdbTool
             });
         }
 
+        private void ApplyDisplayFontScale()
+        {
+            if (!EnsureSingleCheckedDeviceForDisplayControl()) return;
+
+            var scale = GetDisplayScaleFromTrackBar(displayFontScaleTrackBar);
+            var scaleText = FormatDisplayScaleCommandValue(scale);
+            RunDisplayControlOperation("正在修改字体大小倍数...", delegate(string adb, DeviceInfo device)
+            {
+                if (!ExecuteDisplayControlCommand(adb, device.Serial, "修改字体大小倍数", new[] { "settings", "put", "system", "font_scale", scaleText })) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, "字体大小倍数已修改：" + FormatDisplayScaleValue(scale));
+            });
+        }
+
+        private void RestoreDisplayFontScale()
+        {
+            RunDisplayControlOperation("正在恢复字体大小倍数...", delegate(string adb, DeviceInfo device)
+            {
+                if (!ExecuteDisplayControlCommand(adb, device.Serial, "恢复字体大小倍数", new[] { "settings", "put", "system", "font_scale", FormatDisplayScaleCommandValue(DefaultDisplayScale) })) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, "字体大小倍数已恢复为 1x。");
+            });
+        }
+
+        private void ApplyDisplayAnimationScale()
+        {
+            if (!EnsureSingleCheckedDeviceForDisplayControl()) return;
+
+            var windowScale = GetDisplayScaleFromTrackBar(windowAnimationScaleTrackBar);
+            var transitionScale = GetDisplayScaleFromTrackBar(transitionAnimationScaleTrackBar);
+            var animatorScale = GetDisplayScaleFromTrackBar(animatorDurationScaleTrackBar);
+            RunDisplayControlOperation("正在修改动画速度...", delegate(string adb, DeviceInfo device)
+            {
+                if (!ApplyDisplayAnimationScale(adb, device.Serial, windowScale, transitionScale, animatorScale, "修改动画速度")) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, "动画速度已修改：窗口 " + FormatDisplayScaleValue(windowScale) + "，过渡 " + FormatDisplayScaleValue(transitionScale) + "，程序 " + FormatDisplayScaleValue(animatorScale));
+            });
+        }
+
+        private void RestoreDisplayAnimationScale()
+        {
+            RunDisplayControlOperation("正在恢复动画速度...", delegate(string adb, DeviceInfo device)
+            {
+                if (!ApplyDisplayAnimationScale(adb, device.Serial, DefaultDisplayScale, DefaultDisplayScale, DefaultDisplayScale, "恢复动画速度")) return;
+                RefreshDisplayInfoAfterChange(adb, device.Serial, "动画速度已恢复为 1x。");
+            });
+        }
+
+        private bool ApplyDisplayAnimationScale(string adb, string serial, double windowScale, double transitionScale, double animatorScale, string title)
+        {
+            if (!ExecuteDisplayControlCommand(adb, serial, title + "（窗口）", new[] { "settings", "put", "global", "window_animation_scale", FormatDisplayScaleCommandValue(windowScale) })) return false;
+            if (cancelRequested) return false;
+            if (!ExecuteDisplayControlCommand(adb, serial, title + "（过渡）", new[] { "settings", "put", "global", "transition_animation_scale", FormatDisplayScaleCommandValue(transitionScale) })) return false;
+            if (cancelRequested) return false;
+            if (!ExecuteDisplayControlCommand(adb, serial, title + "（程序）", new[] { "settings", "put", "global", "animator_duration_scale", FormatDisplayScaleCommandValue(animatorScale) })) return false;
+            return true;
+        }
+
         private void RestoreAllDisplaySettings()
         {
             RunDisplayControlOperation("正在恢复全部显示设置...", delegate(string adb, DeviceInfo device)
@@ -1995,7 +2242,11 @@ namespace AdbTool
                 var sizeOk = ExecuteDisplayControlCommand(adb, device.Serial, "恢复屏幕分辨率", new[] { "wm", "size", "reset" });
                 if (cancelRequested) return;
                 var densityOk = ExecuteDisplayControlCommand(adb, device.Serial, "恢复显示密度", new[] { "wm", "density", "reset" });
-                var message = sizeOk && densityOk ? "显示设置已全部恢复默认。" : "显示设置恢复未全部成功，请查看日志。";
+                if (cancelRequested) return;
+                var fontOk = ExecuteDisplayControlCommand(adb, device.Serial, "恢复字体大小倍数", new[] { "settings", "put", "system", "font_scale", FormatDisplayScaleCommandValue(DefaultDisplayScale) });
+                if (cancelRequested) return;
+                var animationOk = ApplyDisplayAnimationScale(adb, device.Serial, DefaultDisplayScale, DefaultDisplayScale, DefaultDisplayScale, "恢复动画速度");
+                var message = sizeOk && densityOk && fontOk && animationOk ? "显示设置已全部恢复默认。" : "显示设置恢复未全部成功，请查看日志。";
                 RefreshDisplayInfoAfterChange(adb, device.Serial, message);
             });
         }
@@ -2083,6 +2334,8 @@ namespace AdbTool
             var info = new DisplayControlInfo();
             var hasSize = TryParseDisplaySizeOutput(sizeResult.Output, info);
             var hasDensity = TryParseDisplayDensityOutput(densityResult.Output, info);
+            ReadDisplayControlScaleSettings(adb, serial, cancellable, info);
+            if (cancelRequested) return null;
             if (!hasSize && !hasDensity)
             {
                 FailDisplayControlOperation("无法解析设备显示信息。");
@@ -2113,12 +2366,104 @@ namespace AdbTool
             var info = new DisplayControlInfo();
             var hasSize = TryParseDisplaySizeOutput(sizeResult.Output, info);
             var hasDensity = TryParseDisplayDensityOutput(densityResult.Output, info);
+            ReadDisplayControlScaleSettingsSilent(adb, serial, info);
             if (!hasSize && !hasDensity)
             {
                 error = "自动读取到的显示信息无法解析。";
                 return null;
             }
             return info;
+        }
+
+        private void ReadDisplayControlScaleSettings(string adb, string serial, bool cancellable, DisplayControlInfo info)
+        {
+            double scale;
+            bool isUnset;
+            if (TryReadDisplayScaleSetting(adb, serial, "system", "font_scale", "字体大小倍数", cancellable, out scale, out isUnset))
+            {
+                info.FontScale = scale;
+                info.HasFontScale = true;
+                info.IsFontScaleUnset = isUnset;
+            }
+            if (cancelRequested) return;
+            if (TryReadDisplayScaleSetting(adb, serial, "global", "window_animation_scale", "窗口动画速度", cancellable, out scale, out isUnset))
+            {
+                info.WindowAnimationScale = scale;
+                info.HasWindowAnimationScale = true;
+                info.IsWindowAnimationScaleUnset = isUnset;
+            }
+            if (cancelRequested) return;
+            if (TryReadDisplayScaleSetting(adb, serial, "global", "transition_animation_scale", "过渡动画速度", cancellable, out scale, out isUnset))
+            {
+                info.TransitionAnimationScale = scale;
+                info.HasTransitionAnimationScale = true;
+                info.IsTransitionAnimationScaleUnset = isUnset;
+            }
+            if (cancelRequested) return;
+            if (TryReadDisplayScaleSetting(adb, serial, "global", "animator_duration_scale", "程序动画速度", cancellable, out scale, out isUnset))
+            {
+                info.AnimatorDurationScale = scale;
+                info.HasAnimatorDurationScale = true;
+                info.IsAnimatorDurationScaleUnset = isUnset;
+            }
+        }
+
+        private void ReadDisplayControlScaleSettingsSilent(string adb, string serial, DisplayControlInfo info)
+        {
+            double scale;
+            bool isUnset;
+            if (TryReadDisplayScaleSettingSilent(adb, serial, "system", "font_scale", out scale, out isUnset))
+            {
+                info.FontScale = scale;
+                info.HasFontScale = true;
+                info.IsFontScaleUnset = isUnset;
+            }
+            if (TryReadDisplayScaleSettingSilent(adb, serial, "global", "window_animation_scale", out scale, out isUnset))
+            {
+                info.WindowAnimationScale = scale;
+                info.HasWindowAnimationScale = true;
+                info.IsWindowAnimationScaleUnset = isUnset;
+            }
+            if (TryReadDisplayScaleSettingSilent(adb, serial, "global", "transition_animation_scale", out scale, out isUnset))
+            {
+                info.TransitionAnimationScale = scale;
+                info.HasTransitionAnimationScale = true;
+                info.IsTransitionAnimationScaleUnset = isUnset;
+            }
+            if (TryReadDisplayScaleSettingSilent(adb, serial, "global", "animator_duration_scale", out scale, out isUnset))
+            {
+                info.AnimatorDurationScale = scale;
+                info.HasAnimatorDurationScale = true;
+                info.IsAnimatorDurationScaleUnset = isUnset;
+            }
+        }
+
+        private bool TryReadDisplayScaleSetting(string adb, string serial, string table, string key, string title, bool cancellable, out double scale, out bool isUnset)
+        {
+            scale = DefaultDisplayScale;
+            isUnset = false;
+            var result = InvokeProcess(adb, new[] { "-s", serial, "shell", "settings", "get", table, key }, cancellable);
+            if (result.Canceled)
+            {
+                FailDisplayControlOperation(title + "读取已中止。");
+                return false;
+            }
+            if (result.ExitCode != 0)
+            {
+                AddLogLine("读取" + title + "失败：" + HumanizeAdbOutput(result.Output));
+                return false;
+            }
+            if (TryParseDisplayScaleOutput(result.Output, out scale, out isUnset)) return true;
+            AddLogLine("无法解析" + title + "输出：" + FirstUsefulLine(result.Output));
+            return false;
+        }
+
+        private bool TryReadDisplayScaleSettingSilent(string adb, string serial, string table, string key, out double scale, out bool isUnset)
+        {
+            scale = DefaultDisplayScale;
+            isUnset = false;
+            var result = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "settings", "get", table, key });
+            return result.ExitCode == 0 && TryParseDisplayScaleOutput(result.Output, out scale, out isUnset);
         }
 
         private bool ExecuteDisplayControlCommand(string adb, string serial, string title, string[] shellArgs)
@@ -2181,16 +2526,50 @@ namespace AdbTool
                 displayDensityInfoLabel.Text = "显示密度：N/A";
                 if (!preserveFocusedInputs || !displayDensityValueTextBox.Focused) displayDensityValueTextBox.Clear();
             }
+
+            if (info.HasFontScale)
+            {
+                displayFontScaleInfoLabel.Text = "字体大小倍数：当前 " + FormatDisplayScaleValue(info.FontScale) + FormatDisplayScaleUnsetSource(info.IsFontScaleUnset);
+                SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, info.FontScale, preserveFocusedInputs);
+            }
+            else
+            {
+                displayFontScaleInfoLabel.Text = "字体大小倍数：N/A";
+                SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
+            }
+
+            if (HasAnyAnimationScale(info))
+            {
+                displayAnimationScaleInfoLabel.Text = "动画速度：" + FormatDisplayAnimationSummary(info);
+                if (info.HasWindowAnimationScale) SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, info.WindowAnimationScale, preserveFocusedInputs);
+                if (info.HasTransitionAnimationScale) SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, info.TransitionAnimationScale, preserveFocusedInputs);
+                if (info.HasAnimatorDurationScale) SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, info.AnimatorDurationScale, preserveFocusedInputs);
+            }
+            else
+            {
+                displayAnimationScaleInfoLabel.Text = "动画速度：N/A";
+                SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
+                SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
+                SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
+            }
+            UpdateDisplayScaleValueLabels();
         }
 
         private void ClearDisplayControlInfo()
         {
             currentDisplayControlInfo = null;
-            displayResolutionInfoLabel.Text = "屏幕分辨率：请选择一台 device 状态的设备后读取。";
-            displayDensityInfoLabel.Text = "显示密度：请选择一台 device 状态的设备后读取。";
+            displayResolutionInfoLabel.Text = "屏幕分辨率";
+            displayDensityInfoLabel.Text = "显示密度";
+            displayFontScaleInfoLabel.Text = "字体大小倍数";
+            displayAnimationScaleInfoLabel.Text = "动画速度";
             displayWidthTextBox.Clear();
             displayHeightTextBox.Clear();
             displayDensityValueTextBox.Clear();
+            SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, DefaultDisplayScale, false);
+            SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, DefaultDisplayScale, false);
+            SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, DefaultDisplayScale, false);
+            SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, DefaultDisplayScale, false);
+            UpdateDisplayScaleValueLabels();
         }
 
         private void UpdateDisplayDensityValueForSelectedUnit()
@@ -2219,6 +2598,61 @@ namespace AdbTool
             {
                 displayDensityValueTextBox.Text = currentDisplayControlInfo.CurrentDensity.ToString();
             }
+        }
+
+        private void UpdateDisplayScaleValueLabels()
+        {
+            displayFontScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(displayFontScaleTrackBar));
+            windowAnimationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(windowAnimationScaleTrackBar));
+            transitionAnimationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(transitionAnimationScaleTrackBar));
+            animatorDurationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(animatorDurationScaleTrackBar));
+        }
+
+        private void SetDisplayScaleTrackBarValue(TrackBar trackBar, double scale, bool preserveFocusedInput)
+        {
+            if (preserveFocusedInput && trackBar.Focused) return;
+            trackBar.Value = TrackBarValueFromDisplayScale(scale);
+        }
+
+        private static bool HasAnyAnimationScale(DisplayControlInfo info)
+        {
+            return info != null && (info.HasWindowAnimationScale || info.HasTransitionAnimationScale || info.HasAnimatorDurationScale);
+        }
+
+        private static string FormatDisplayAnimationSummary(DisplayControlInfo info)
+        {
+            var windowText = info.HasWindowAnimationScale ? FormatDisplayScaleValue(info.WindowAnimationScale) + FormatDisplayScaleUnsetSource(info.IsWindowAnimationScaleUnset) : "N/A";
+            var transitionText = info.HasTransitionAnimationScale ? FormatDisplayScaleValue(info.TransitionAnimationScale) + FormatDisplayScaleUnsetSource(info.IsTransitionAnimationScaleUnset) : "N/A";
+            var animatorText = info.HasAnimatorDurationScale ? FormatDisplayScaleValue(info.AnimatorDurationScale) + FormatDisplayScaleUnsetSource(info.IsAnimatorDurationScaleUnset) : "N/A";
+            return "窗口 " + windowText + "，过渡 " + transitionText + "，程序 " + animatorText;
+        }
+
+        private static string FormatDisplayScaleUnsetSource(bool isUnset)
+        {
+            return isUnset ? "（未设置，按 1x）" : "";
+        }
+
+        private static double GetDisplayScaleFromTrackBar(TrackBar trackBar)
+        {
+            return Math.Round(trackBar.Value * DisplayScaleStep, 2);
+        }
+
+        private static int TrackBarValueFromDisplayScale(double scale)
+        {
+            if (double.IsNaN(scale) || double.IsInfinity(scale)) scale = DefaultDisplayScale;
+            var value = (int)Math.Round(scale / DisplayScaleStep);
+            return ClampInt(value, 0, DisplayScaleTrackBarMaximum);
+        }
+
+        private static string FormatDisplayScaleValue(double scale)
+        {
+            return FormatDisplayScaleCommandValue(scale) + "x";
+        }
+
+        private static string FormatDisplayScaleCommandValue(double scale)
+        {
+            if (double.IsNaN(scale) || double.IsInfinity(scale)) scale = DefaultDisplayScale;
+            return scale.ToString("0.##", CultureInfo.InvariantCulture);
         }
 
         private void FailDisplayControlOperation(string message)
@@ -2284,6 +2718,32 @@ namespace AdbTool
                 info.HasOverrideDensity = true;
             }
             return info.HasCurrentDensity;
+        }
+
+        private static bool TryParseDisplayScaleOutput(string output, out double scale, out bool isUnset)
+        {
+            scale = DefaultDisplayScale;
+            isUnset = false;
+            foreach (var rawLine in SplitLines(output))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0) continue;
+                if (string.Equals(line, "null", StringComparison.OrdinalIgnoreCase) || string.Equals(line, "undefined", StringComparison.OrdinalIgnoreCase))
+                {
+                    isUnset = true;
+                    return true;
+                }
+                double value;
+                if (double.TryParse(line, NumberStyles.Float, CultureInfo.InvariantCulture, out value) ||
+                    double.TryParse(line, NumberStyles.Float, CultureInfo.CurrentCulture, out value))
+                {
+                    scale = Math.Max(0, value);
+                    return true;
+                }
+                return false;
+            }
+            isUnset = true;
+            return true;
         }
 
         private static int CalculateSmallestWidthDp(int width, int height, int density)
@@ -2806,6 +3266,14 @@ namespace AdbTool
             displayDensityUnitComboBox.Enabled = enabled;
             applyDensityButton.Enabled = enabled;
             restoreDensityButton.Enabled = enabled;
+            displayFontScaleTrackBar.Enabled = enabled;
+            applyFontScaleButton.Enabled = enabled;
+            restoreFontScaleButton.Enabled = enabled;
+            windowAnimationScaleTrackBar.Enabled = enabled;
+            transitionAnimationScaleTrackBar.Enabled = enabled;
+            animatorDurationScaleTrackBar.Enabled = enabled;
+            applyAnimationScaleButton.Enabled = enabled;
+            restoreAnimationScaleButton.Enabled = enabled;
         }
 
         private void SetDeviceInfoControlsEnabled(bool enabled)
