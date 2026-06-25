@@ -210,8 +210,6 @@ namespace AdbTool
         private readonly Button restoreAnimationScaleButton = new Button();
         private readonly Button restoreDisplayAllButton = new Button();
         private readonly ToolTip displayControlToolTip = new ToolTip();
-        private readonly System.Windows.Forms.Timer displayControlRefreshTimer = new System.Windows.Forms.Timer();
-
         private readonly ToolTip toolPathToolTip = new ToolTip();
 
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
@@ -265,7 +263,6 @@ namespace AdbTool
         private DateTime screenRecordStartedAt;
         private ApkInfo currentApkInfo;
         private DisplayControlInfo currentDisplayControlInfo;
-        private volatile bool isDisplayControlAutoRefreshing;
         private string currentDeviceInfoSerial = "";
         private string configuredAdbPath = "";
         private string configuredAaptPath = "";
@@ -641,7 +638,7 @@ namespace AdbTool
             scalePanel.Controls.Add(CreateDisplayScaleRow("程序", animatorDurationScaleTrackBar, animatorDurationScaleValueLabel, null, null), 0, 6);
             scalePanel.Controls.Add(CreateDisplayScaleMarkerPanel(), 0, 7);
 
-            displayControlStatusLabel.Text = "修改显示参数、字体倍数或动画速度可能会短暂刷新设备画面；异常时可使用恢复按钮。";
+            displayControlStatusLabel.Text = "请勾选一台 device 状态设备后点击“刷新显示信息”；修改显示参数、字体倍数或动画速度可能会短暂刷新设备画面。";
             displayControlStatusLabel.Dock = DockStyle.Fill;
             displayControlStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             displayControlStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
@@ -1396,10 +1393,6 @@ namespace AdbTool
             uninstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             clearDataModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             startAppModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            tabControl.SelectedIndexChanged += delegate { UpdateDisplayControlAutoRefreshState(); };
-            deviceList.SelectedIndexChanged += delegate { OnDeviceListSelectionChanged(); };
-            deviceList.ItemCheck += delegate { BeginDisplayControlAutoRefresh(); };
-            deviceList.MouseUp += delegate(object sender, MouseEventArgs e) { OnDeviceListMouseUp(e); };
             queryDeviceInfoButton.Click += delegate { StartDeviceInfoRefresh(); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
@@ -1439,8 +1432,6 @@ namespace AdbTool
             logRecordStatusTimer.Tick += delegate { UpdateLogRecordStatus(); };
             screenRecordStatusTimer.Interval = 1000;
             screenRecordStatusTimer.Tick += delegate { UpdateScreenRecordStatus(); };
-            displayControlRefreshTimer.Interval = 3000;
-            displayControlRefreshTimer.Tick += delegate { BeginDisplayControlAutoRefresh(); };
             logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordTagTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordPackageTextBox.TextChanged += delegate { SaveConfig(); };
@@ -2022,90 +2013,6 @@ namespace AdbTool
             });
         }
 
-        private void UpdateDisplayControlAutoRefreshState()
-        {
-            if (tabControl.SelectedTab == displayControlTab)
-            {
-                displayControlRefreshTimer.Start();
-                BeginDisplayControlAutoRefresh();
-            }
-            else
-            {
-                displayControlRefreshTimer.Stop();
-            }
-        }
-
-        private void BeginDisplayControlAutoRefresh()
-        {
-            if (IsDisposed) return;
-            try { BeginInvoke(new Action(StartDisplayControlAutoRefresh)); } catch { }
-        }
-
-        private void StartDisplayControlAutoRefresh()
-        {
-            if (tabControl.SelectedTab != displayControlTab) return;
-
-            DeviceInfo device;
-            if (!TryGetSingleCheckedDeviceForDisplayControl(out device))
-            {
-                ClearDisplayControlInfo();
-                displayControlStatusLabel.Text = "请选择一台 device 状态的目标设备，显示参数会自动刷新。";
-                return;
-            }
-
-            if (isDisplayControlAutoRefreshing || isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
-
-            var adb = FindAdb();
-            if (adb == null)
-            {
-                displayControlStatusLabel.Text = "未找到 adb.exe，无法自动读取显示信息。";
-                UpdateToolPathStatus();
-                return;
-            }
-
-            var serial = device.Serial;
-            isDisplayControlAutoRefreshing = true;
-            var thread = new Thread(new ThreadStart(delegate
-            {
-                string error;
-                var info = ReadDisplayControlInfoSilent(adb, serial, out error);
-                if (IsDisposed)
-                {
-                    isDisplayControlAutoRefreshing = false;
-                    return;
-                }
-                BeginInvokeIfNeeded(delegate
-                {
-                    try
-                    {
-                        DeviceInfo currentDevice;
-                        if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
-                        if (tabControl.SelectedTab != displayControlTab) return;
-                        if (!TryGetSingleCheckedDeviceForDisplayControl(out currentDevice))
-                        {
-                            ClearDisplayControlInfo();
-                            displayControlStatusLabel.Text = "请选择一台 device 状态的目标设备，显示参数会自动刷新。";
-                            return;
-                        }
-                        if (!string.Equals(currentDevice.Serial, serial, StringComparison.Ordinal)) return;
-                        if (info == null)
-                        {
-                            displayControlStatusLabel.Text = string.IsNullOrWhiteSpace(error) ? "自动刷新显示信息失败。" : error;
-                            return;
-                        }
-                        ApplyDisplayControlInfo(info, true);
-                        displayControlStatusLabel.Text = "显示信息已自动刷新：" + DateTime.Now.ToString("HH:mm:ss");
-                    }
-                    finally
-                    {
-                        isDisplayControlAutoRefreshing = false;
-                    }
-                });
-            }));
-            thread.IsBackground = true;
-            thread.Start();
-        }
-
         private void ApplyDisplayResolution()
         {
             if (!EnsureSingleCheckedDeviceForDisplayControl()) return;
@@ -2346,35 +2253,6 @@ namespace AdbTool
             return info;
         }
 
-        private DisplayControlInfo ReadDisplayControlInfoSilent(string adb, string serial, out string error)
-        {
-            error = "";
-            var sizeResult = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "wm", "size" });
-            if (sizeResult.ExitCode != 0)
-            {
-                error = "自动读取屏幕分辨率失败：" + HumanizeAdbOutput(sizeResult.Output);
-                return null;
-            }
-
-            var densityResult = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "wm", "density" });
-            if (densityResult.ExitCode != 0)
-            {
-                error = "自动读取显示密度失败：" + HumanizeAdbOutput(densityResult.Output);
-                return null;
-            }
-
-            var info = new DisplayControlInfo();
-            var hasSize = TryParseDisplaySizeOutput(sizeResult.Output, info);
-            var hasDensity = TryParseDisplayDensityOutput(densityResult.Output, info);
-            ReadDisplayControlScaleSettingsSilent(adb, serial, info);
-            if (!hasSize && !hasDensity)
-            {
-                error = "自动读取到的显示信息无法解析。";
-                return null;
-            }
-            return info;
-        }
-
         private void ReadDisplayControlScaleSettings(string adb, string serial, bool cancellable, DisplayControlInfo info)
         {
             double scale;
@@ -2408,36 +2286,6 @@ namespace AdbTool
             }
         }
 
-        private void ReadDisplayControlScaleSettingsSilent(string adb, string serial, DisplayControlInfo info)
-        {
-            double scale;
-            bool isUnset;
-            if (TryReadDisplayScaleSettingSilent(adb, serial, "system", "font_scale", out scale, out isUnset))
-            {
-                info.FontScale = scale;
-                info.HasFontScale = true;
-                info.IsFontScaleUnset = isUnset;
-            }
-            if (TryReadDisplayScaleSettingSilent(adb, serial, "global", "window_animation_scale", out scale, out isUnset))
-            {
-                info.WindowAnimationScale = scale;
-                info.HasWindowAnimationScale = true;
-                info.IsWindowAnimationScaleUnset = isUnset;
-            }
-            if (TryReadDisplayScaleSettingSilent(adb, serial, "global", "transition_animation_scale", out scale, out isUnset))
-            {
-                info.TransitionAnimationScale = scale;
-                info.HasTransitionAnimationScale = true;
-                info.IsTransitionAnimationScaleUnset = isUnset;
-            }
-            if (TryReadDisplayScaleSettingSilent(adb, serial, "global", "animator_duration_scale", out scale, out isUnset))
-            {
-                info.AnimatorDurationScale = scale;
-                info.HasAnimatorDurationScale = true;
-                info.IsAnimatorDurationScaleUnset = isUnset;
-            }
-        }
-
         private bool TryReadDisplayScaleSetting(string adb, string serial, string table, string key, string title, bool cancellable, out double scale, out bool isUnset)
         {
             scale = DefaultDisplayScale;
@@ -2456,14 +2304,6 @@ namespace AdbTool
             if (TryParseDisplayScaleOutput(result.Output, out scale, out isUnset)) return true;
             AddLogLine("无法解析" + title + "输出：" + FirstUsefulLine(result.Output));
             return false;
-        }
-
-        private bool TryReadDisplayScaleSettingSilent(string adb, string serial, string table, string key, out double scale, out bool isUnset)
-        {
-            scale = DefaultDisplayScale;
-            isUnset = false;
-            var result = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "settings", "get", table, key });
-            return result.ExitCode == 0 && TryParseDisplayScaleOutput(result.Output, out scale, out isUnset);
         }
 
         private bool ExecuteDisplayControlCommand(string adb, string serial, string title, string[] shellArgs)
@@ -4216,20 +4056,6 @@ namespace AdbTool
             return process;
         }
 
-        private void OnDeviceListSelectionChanged()
-        {
-            BeginDisplayControlAutoRefresh();
-        }
-
-        private void OnDeviceListMouseUp(MouseEventArgs e)
-        {
-            if (e.Button != MouseButtons.Left) return;
-            var index = deviceList.IndexFromPoint(e.Location);
-            if (index < 0 || index >= deviceList.Items.Count) return;
-            if (deviceList.SelectedIndex != index) deviceList.SelectedIndex = index;
-            BeginDisplayControlAutoRefresh();
-        }
-
         private void BrowseApk()
         {
             using (var dialog = new OpenFileDialog())
@@ -5212,7 +5038,6 @@ namespace AdbTool
                 deviceInfoTextBox.Text = "请在下方目标设备列表中勾选一台 device 状态设备，然后点击查询。";
             }
             statusLabel.Text = "检测到 " + devices.Count + " 台设备，可用 " + devices.Count(d => d.State == "device") + " 台。";
-            BeginDisplayControlAutoRefresh();
         }
 
         private List<DeviceInfo> GetConnectedDevices(string adb)
@@ -5696,7 +5521,6 @@ namespace AdbTool
         {
             CaptureLayoutHeights();
             SaveConfig();
-            displayControlRefreshTimer.Stop();
             if (isScreenRecordRunning)
             {
                 e.Cancel = true;
