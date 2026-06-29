@@ -48,6 +48,20 @@ namespace AdbTool
             ScreenRecord
         }
 
+        private enum SoftwareManagementOperation
+        {
+            Launch,
+            ForceStop,
+            ShowInfo,
+            Disable,
+            Enable,
+            ClearData,
+            Uninstall,
+            KeepDataUninstall,
+            ExtractApk,
+            ToggleUninstallLock
+        }
+
         private sealed class ScreenRecordOptions
         {
             public bool HasTimeLimit;
@@ -106,10 +120,17 @@ namespace AdbTool
             }
         }
 
+        private sealed class ForegroundAppInfo
+        {
+            public string PackageName = "";
+            public string ActivityName = "";
+        }
+
         private readonly TabControl tabControl = new TabControl();
         private readonly SplitContainer mainSplitContainer = new SplitContainer();
         private readonly SplitContainer lowerSplitContainer = new SplitContainer();
         private readonly TabPage installTab = new TabPage("APK 安装");
+        private readonly TabPage softwareManagementTab = new TabPage("软件管理");
         private readonly TabPage deviceInfoTab = new TabPage("设备概览");
         private readonly TabPage displayControlTab = new TabPage("显示控制");
         private readonly TabPage logRecordTab = new TabPage("日志录制");
@@ -133,6 +154,24 @@ namespace AdbTool
         private readonly Label apkInfoLabel = new Label();
         private readonly Label statusLabel = new Label();
         private readonly TextBox logBox = new TextBox();
+
+        private readonly TextBox softwarePackageTextBox = new TextBox();
+        private readonly TextBox softwareForegroundPackageTextBox = new TextBox();
+        private readonly TextBox softwareForegroundActivityTextBox = new TextBox();
+        private readonly CheckBox softwareAutoFillCheckBox = new CheckBox();
+        private readonly Button softwareLaunchButton = new Button();
+        private readonly Button softwareForceStopButton = new Button();
+        private readonly Button softwareInfoButton = new Button();
+        private readonly Button softwareDisableButton = new Button();
+        private readonly Button softwareEnableButton = new Button();
+        private readonly Button softwareClearDataButton = new Button();
+        private readonly Button softwareUninstallButton = new Button();
+        private readonly Button softwareKeepDataUninstallButton = new Button();
+        private readonly Button softwareExtractApkButton = new Button();
+        private readonly Button softwareUninstallLockButton = new Button();
+        private readonly Label softwareManagementStatusLabel = new Label();
+        private readonly System.Windows.Forms.Timer softwareForegroundTimer = new System.Windows.Forms.Timer();
+        private readonly ToolTip softwareManagementToolTip = new ToolTip();
 
         private readonly TextBox deviceInfoTextBox = new TextBox();
         private readonly Button queryDeviceInfoButton = new Button();
@@ -219,6 +258,7 @@ namespace AdbTool
         private readonly string configPath;
         private readonly string logDir;
         private readonly string screenshotDir;
+        private readonly string apkExtractDir;
         private const int DefaultTabAreaHeight = 300;
         private const int DefaultDeviceAreaHeight = 162;
         private const int DefaultLogAreaHeight = 376;
@@ -244,6 +284,7 @@ namespace AdbTool
         private volatile bool isScreenshotRunning;
         private volatile bool isScreenRecordRunning;
         private volatile bool screenRecordStopRequested;
+        private volatile bool isSoftwareForegroundRefreshing;
         private bool loadingConfig;
         private bool configReady;
         private bool applyingLayoutConfig;
@@ -281,6 +322,7 @@ namespace AdbTool
             configPath = Path.Combine(userDataDir, ConfigFileName);
             logDir = Path.Combine(userDataDir, "log");
             screenshotDir = GetDefaultScreenshotDir(appDir);
+            apkExtractDir = Path.Combine(userDataDir, "ApkExt");
             Text = AppDisplayName;
             ApplyWindowIcon();
             StartPosition = FormStartPosition.CenterScreen;
@@ -299,6 +341,8 @@ namespace AdbTool
             configReady = true;
             UpdateToolPathStatus();
             UpdateExecutionOptionState();
+            UpdateSoftwareAutoFillState();
+            UpdateSoftwareForegroundTimerState();
             UpdateTransferStatus();
             RefreshDevices();
         }
@@ -331,6 +375,7 @@ namespace AdbTool
 
             tabControl.Dock = DockStyle.Fill;
             tabControl.TabPages.Add(installTab);
+            tabControl.TabPages.Add(softwareManagementTab);
             tabControl.TabPages.Add(deviceInfoTab);
             tabControl.TabPages.Add(displayControlTab);
             tabControl.TabPages.Add(logRecordTab);
@@ -346,6 +391,7 @@ namespace AdbTool
             mainSplitContainer.Panel2.Controls.Add(lowerSplitContainer);
 
             BuildInstallTab();
+            BuildSoftwareManagementTab();
             BuildDeviceInfoTab();
             BuildDisplayControlTab();
             BuildLogRecordTab();
@@ -424,6 +470,154 @@ namespace AdbTool
             cancelButton.Margin = new Padding(0, 4, 8, 0);
             cancelButton.Enabled = false;
             actionPanel.Controls.Add(cancelButton, 1, 0);
+        }
+
+        private void BuildSoftwareManagementTab()
+        {
+            softwareManagementTab.Padding = new Padding(10);
+            softwareManagementTab.AutoScroll = true;
+
+            var panel = new TableLayoutPanel();
+            panel.Dock = DockStyle.Top;
+            panel.Height = 258;
+            panel.ColumnCount = 1;
+            panel.RowCount = 5;
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            softwareManagementTab.Controls.Add(panel);
+
+            var foregroundPackagePanel = new TableLayoutPanel();
+            foregroundPackagePanel.Dock = DockStyle.Fill;
+            foregroundPackagePanel.ColumnCount = 3;
+            foregroundPackagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            foregroundPackagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            foregroundPackagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
+            panel.Controls.Add(foregroundPackagePanel, 0, 0);
+            AddLabel(foregroundPackagePanel, "当前界面包名", 0);
+            ConfigureSoftwareTextBox(softwareForegroundPackageTextBox, true);
+            foregroundPackagePanel.Controls.Add(softwareForegroundPackageTextBox, 1, 0);
+
+            var foregroundActivityPanel = new TableLayoutPanel();
+            foregroundActivityPanel.Dock = DockStyle.Fill;
+            foregroundActivityPanel.ColumnCount = 3;
+            foregroundActivityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            foregroundActivityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            foregroundActivityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
+            panel.Controls.Add(foregroundActivityPanel, 0, 1);
+            AddLabel(foregroundActivityPanel, "当前界面活动", 0);
+            ConfigureSoftwareTextBox(softwareForegroundActivityTextBox, true);
+            foregroundActivityPanel.Controls.Add(softwareForegroundActivityTextBox, 1, 0);
+
+            var packagePanel = new TableLayoutPanel();
+            packagePanel.Dock = DockStyle.Fill;
+            packagePanel.ColumnCount = 4;
+            packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
+            panel.Controls.Add(packagePanel, 0, 2);
+            AddLabel(packagePanel, "软件包名", 0);
+            ConfigureSoftwareTextBox(softwarePackageTextBox, false);
+            packagePanel.Controls.Add(softwarePackageTextBox, 1, 0);
+            softwareAutoFillCheckBox.Text = "自动填充";
+            softwareAutoFillCheckBox.AutoSize = true;
+            softwareAutoFillCheckBox.Dock = DockStyle.Fill;
+            softwareAutoFillCheckBox.Margin = new Padding(8, 8, 0, 0);
+            packagePanel.Controls.Add(softwareAutoFillCheckBox, 2, 0);
+
+            var actionsPanel = new TableLayoutPanel();
+            actionsPanel.Dock = DockStyle.Fill;
+            actionsPanel.ColumnCount = 3;
+            actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+            actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
+            actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
+            panel.Controls.Add(actionsPanel, 0, 3);
+
+            FlowLayoutPanel basicPanel;
+            var basicGroup = CreateSoftwareActionGroup("基础操作", out basicPanel);
+            AddSoftwareActionButton(basicPanel, softwareLaunchButton, "运行");
+            AddSoftwareActionButton(basicPanel, softwareForceStopButton, "强制停止");
+            AddSoftwareActionButton(basicPanel, softwareInfoButton, "软件信息");
+            AddSoftwareActionButton(basicPanel, softwareExtractApkButton, "提取安装包");
+            actionsPanel.Controls.Add(basicGroup, 0, 0);
+
+            FlowLayoutPanel managePanel;
+            var manageGroup = CreateSoftwareActionGroup("数据与状态", out managePanel);
+            AddSoftwareActionButton(managePanel, softwareDisableButton, "禁用");
+            AddSoftwareActionButton(managePanel, softwareEnableButton, "启用");
+            AddSoftwareActionButton(managePanel, softwareClearDataButton, "清除数据");
+            actionsPanel.Controls.Add(manageGroup, 1, 0);
+
+            FlowLayoutPanel dangerPanel;
+            var dangerGroup = CreateSoftwareActionGroup("卸载与高级", out dangerPanel);
+            AddSoftwareActionButton(dangerPanel, softwareUninstallButton, "卸载");
+            AddSoftwareActionButton(dangerPanel, softwareKeepDataUninstallButton, "保留数据卸载");
+            AddSoftwareActionButton(dangerPanel, softwareUninstallLockButton, "卸载锁设置");
+            actionsPanel.Controls.Add(dangerGroup, 2, 0);
+
+            softwareManagementStatusLabel.Text = "请勾选一台 device 状态设备，并输入软件包名；切换到本页后会读取当前界面包名和活动。";
+            softwareManagementStatusLabel.Dock = DockStyle.Fill;
+            softwareManagementStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            softwareManagementStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
+            softwareManagementStatusLabel.AutoEllipsis = true;
+            panel.Controls.Add(softwareManagementStatusLabel, 0, 4);
+
+            softwareManagementToolTip.SetToolTip(softwareAutoFillCheckBox, "开启后会把当前界面包名自动填入软件包名。");
+            softwareManagementToolTip.SetToolTip(softwareLaunchButton, "使用 monkey 启动该包名的默认入口。");
+            softwareManagementToolTip.SetToolTip(softwareForceStopButton, "执行 am force-stop。");
+            softwareManagementToolTip.SetToolTip(softwareInfoButton, "读取 dumpsys package 中的版本、路径和状态摘要。");
+            softwareManagementToolTip.SetToolTip(softwareExtractApkButton, "读取 pm path 并把 APK 拉取到本机 ApkExt 目录。");
+            softwareManagementToolTip.SetToolTip(softwareDisableButton, "执行 pm disable-user。");
+            softwareManagementToolTip.SetToolTip(softwareEnableButton, "执行 pm enable。");
+            softwareManagementToolTip.SetToolTip(softwareClearDataButton, "执行 pm clear，会清除应用数据。");
+            softwareManagementToolTip.SetToolTip(softwareUninstallButton, "第三方应用正常卸载；系统应用需高风险确认后按当前用户卸载。");
+            softwareManagementToolTip.SetToolTip(softwareKeepDataUninstallButton, "执行 pm uninstall -k，保留应用数据卸载。");
+            softwareManagementToolTip.SetToolTip(softwareUninstallLockButton, "仅部分 Android 版本和第三方应用支持。");
+        }
+
+        private void ConfigureSoftwareTextBox(TextBox textBox, bool readOnly)
+        {
+            textBox.Dock = DockStyle.Fill;
+            textBox.Margin = new Padding(0, 4, 8, 4);
+            textBox.ReadOnly = readOnly;
+        }
+
+        private TableLayoutPanel CreateSoftwareActionGroup(string title, out FlowLayoutPanel flow)
+        {
+            var host = new TableLayoutPanel();
+            host.Dock = DockStyle.Fill;
+            host.Margin = new Padding(0, 0, 12, 0);
+            host.ColumnCount = 1;
+            host.RowCount = 2;
+            host.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+            host.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var label = new Label();
+            label.Text = title;
+            label.Dock = DockStyle.Fill;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+            label.ForeColor = Color.FromArgb(60, 60, 60);
+            host.Controls.Add(label, 0, 0);
+
+            flow = new FlowLayoutPanel();
+            flow.Dock = DockStyle.Fill;
+            flow.FlowDirection = FlowDirection.LeftToRight;
+            flow.WrapContents = true;
+            flow.Margin = Padding.Empty;
+            host.Controls.Add(flow, 0, 1);
+
+            return host;
+        }
+
+        private void AddSoftwareActionButton(FlowLayoutPanel panel, Button button, string text)
+        {
+            button.Text = text;
+            button.Size = text.Length >= 6 ? new Size(118, 28) : new Size(88, 28);
+            button.Margin = new Padding(0, 4, 8, 4);
+            panel.Controls.Add(button);
         }
 
         private void AddModeOption(FlowLayoutPanel panel, RadioButton button, string text, bool isChecked)
@@ -1393,6 +1587,18 @@ namespace AdbTool
             uninstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             clearDataModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
             startAppModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
+            softwarePackageTextBox.TextChanged += delegate { SaveConfig(); };
+            softwareAutoFillCheckBox.CheckedChanged += delegate { UpdateSoftwareAutoFillState(); SaveConfig(); };
+            softwareLaunchButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Launch); };
+            softwareForceStopButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ForceStop); };
+            softwareInfoButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ShowInfo); };
+            softwareDisableButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Disable); };
+            softwareEnableButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Enable); };
+            softwareClearDataButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ClearData); };
+            softwareUninstallButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Uninstall); };
+            softwareKeepDataUninstallButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.KeepDataUninstall); };
+            softwareExtractApkButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ExtractApk); };
+            softwareUninstallLockButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ToggleUninstallLock); };
             queryDeviceInfoButton.Click += delegate { StartDeviceInfoRefresh(); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
@@ -1432,6 +1638,9 @@ namespace AdbTool
             logRecordStatusTimer.Tick += delegate { UpdateLogRecordStatus(); };
             screenRecordStatusTimer.Interval = 1000;
             screenRecordStatusTimer.Tick += delegate { UpdateScreenRecordStatus(); };
+            softwareForegroundTimer.Interval = 1800;
+            softwareForegroundTimer.Tick += delegate { RefreshSoftwareForegroundFromTimer(); };
+            tabControl.SelectedIndexChanged += delegate { UpdateSoftwareForegroundTimerState(); };
             logRecordPathTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordTagTextBox.TextChanged += delegate { SaveConfig(); };
             logRecordPackageTextBox.TextChanged += delegate { SaveConfig(); };
@@ -3094,6 +3303,34 @@ namespace AdbTool
             screenRecordBitRateNumeric.Enabled = !busy;
         }
 
+        private void SetSoftwareManagementControlsEnabled(bool enabled)
+        {
+            softwarePackageTextBox.Enabled = enabled;
+            softwareForegroundPackageTextBox.Enabled = enabled;
+            softwareForegroundActivityTextBox.Enabled = enabled;
+            softwareAutoFillCheckBox.Enabled = enabled;
+            softwareLaunchButton.Enabled = enabled;
+            softwareForceStopButton.Enabled = enabled;
+            softwareInfoButton.Enabled = enabled;
+            softwareDisableButton.Enabled = enabled;
+            softwareEnableButton.Enabled = enabled;
+            softwareClearDataButton.Enabled = enabled;
+            softwareUninstallButton.Enabled = enabled;
+            softwareKeepDataUninstallButton.Enabled = enabled;
+            softwareExtractApkButton.Enabled = enabled;
+            softwareUninstallLockButton.Enabled = enabled;
+            UpdateSoftwareAutoFillState();
+        }
+
+        private void UpdateSoftwareAutoFillState()
+        {
+            softwarePackageTextBox.ReadOnly = softwareAutoFillCheckBox.Checked;
+            if (softwareAutoFillCheckBox.Checked && !string.IsNullOrWhiteSpace(softwareForegroundPackageTextBox.Text))
+            {
+                softwarePackageTextBox.Text = softwareForegroundPackageTextBox.Text.Trim();
+            }
+        }
+
         private void SetDisplayControlControlsEnabled(bool enabled)
         {
             refreshDisplayInfoButton.Enabled = enabled;
@@ -3161,6 +3398,7 @@ namespace AdbTool
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
+            SetSoftwareManagementControlsEnabled(!busy);
             refreshButton.Enabled = !busy;
             settingsButton.Enabled = !busy;
             deviceList.Enabled = !busy;
@@ -3715,6 +3953,7 @@ namespace AdbTool
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
+            SetSoftwareManagementControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenshotRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             if (running) UpdateScreenRecordStatus();
@@ -4257,8 +4496,747 @@ namespace AdbTool
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
+            SetSoftwareManagementControlsEnabled(!busy);
             deviceList.Enabled = !busy;
             if (running) statusLabel.Text = "正在执行设备连接操作...";
+        }
+
+        private void StartSoftwareManagementOperation(SoftwareManagementOperation operation)
+        {
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                HandleMissingAdb(true);
+                return;
+            }
+
+            var device = GetSingleCheckedDevice("软件管理");
+            if (device == null) return;
+
+            var packageName = GetSoftwarePackageName();
+            if (packageName == null) return;
+
+            if (!ConfirmSoftwareOperationBeforeStart(operation, packageName)) return;
+
+            var title = GetSoftwareOperationTitle(operation);
+            cancelRequested = false;
+            isDeviceCommandRunning = true;
+            SetDeviceCommandUi(true);
+            softwareManagementStatusLabel.Text = "正在" + title + "：" + packageName;
+            statusLabel.Text = "正在" + title + "...";
+
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                var summary = "";
+                try
+                {
+                    AddLogLine(title + "：" + packageName + "，设备：" + device.Label);
+                    var success = ExecuteSoftwareManagementOperation(adb, device, packageName, operation, out summary);
+                    if (cancelRequested)
+                    {
+                        summary = title + "已中止。";
+                    }
+                    else if (string.IsNullOrWhiteSpace(summary))
+                    {
+                        summary = success ? title + "完成。" : title + "失败。";
+                    }
+                    AddLogLine(summary);
+                    SetStatus(summary);
+                    SetSoftwareManagementStatus(summary);
+                }
+                catch (Exception ex)
+                {
+                    summary = title + "异常：" + ex.Message;
+                    AddLogLine(summary);
+                    SetStatus(title + "异常");
+                    SetSoftwareManagementStatus(summary);
+                }
+                finally
+                {
+                    isDeviceCommandRunning = false;
+                    BeginInvokeIfNeeded(delegate { SetDeviceCommandUi(false); });
+                }
+            }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private bool ExecuteSoftwareManagementOperation(string adb, DeviceInfo device, string packageName, SoftwareManagementOperation operation, out string summary)
+        {
+            summary = "";
+            var serial = device.Serial;
+            if (operation == SoftwareManagementOperation.ShowInfo) return ShowSoftwarePackageInfo(adb, serial, packageName, out summary);
+            if (operation == SoftwareManagementOperation.ExtractApk) return ExtractSoftwareApk(adb, serial, packageName, out summary);
+            if (operation == SoftwareManagementOperation.Uninstall) return UninstallSoftwarePackage(adb, serial, packageName, out summary);
+            if (operation == SoftwareManagementOperation.ToggleUninstallLock) return ToggleSoftwareUninstallLock(adb, serial, packageName, out summary);
+
+            if (!EnsureSoftwarePackageExists(adb, serial, packageName, out summary)) return false;
+            if (cancelRequested) return false;
+
+            ProcessResult result;
+            switch (operation)
+            {
+                case SoftwareManagementOperation.Launch:
+                    result = InvokeProcess(adb, new[] { "-s", serial, "shell", "monkey", "-p", packageName, "-c", "android.intent.category.LAUNCHER", "1" }, true);
+                    return CompleteSoftwareCommandResult(result, packageName, "启动成功。", "启动失败", out summary);
+
+                case SoftwareManagementOperation.ForceStop:
+                    result = InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "force-stop", packageName }, true);
+                    return CompleteSoftwareCommandResult(result, packageName, "已强制停止。", "强制停止失败", out summary);
+
+                case SoftwareManagementOperation.Disable:
+                    result = InvokeProcess(adb, new[] { "-s", serial, "shell", "pm", "disable-user", packageName }, true);
+                    return CompleteSoftwareCommandResult(result, packageName, "已禁用。", "禁用失败", out summary);
+
+                case SoftwareManagementOperation.Enable:
+                    result = InvokeProcess(adb, new[] { "-s", serial, "shell", "pm", "enable", packageName }, true);
+                    return CompleteSoftwareCommandResult(result, packageName, "已启用。", "启用失败", out summary);
+
+                case SoftwareManagementOperation.ClearData:
+                    result = InvokeProcess(adb, new[] { "-s", serial, "shell", "pm", "clear", packageName }, true);
+                    if (result.Canceled) { summary = "清除数据已中止。"; return false; }
+                    if (result.ExitCode == 0 && result.Output.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        summary = "已清除 " + packageName + " 的应用数据。";
+                        return true;
+                    }
+                    summary = "清除数据失败：" + HumanizeAdbOutput(result.Output);
+                    return false;
+
+                case SoftwareManagementOperation.KeepDataUninstall:
+                    result = InvokeProcess(adb, new[] { "-s", serial, "shell", "pm", "uninstall", "-k", packageName }, true);
+                    if (result.Canceled) { summary = "保留数据卸载已中止。"; return false; }
+                    if (result.ExitCode == 0 && result.Output.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        summary = "已保留数据卸载 " + packageName + "。";
+                        return true;
+                    }
+                    summary = "保留数据卸载失败：" + HumanizeAdbOutput(result.Output);
+                    return false;
+            }
+
+            summary = "未知软件管理操作。";
+            return false;
+        }
+
+        private bool CompleteSoftwareCommandResult(ProcessResult result, string packageName, string successText, string failureText, out string summary)
+        {
+            if (result.Canceled)
+            {
+                summary = failureText + "：已中止。";
+                return false;
+            }
+            if (result.ExitCode == 0 &&
+                result.Output.IndexOf("Error", StringComparison.OrdinalIgnoreCase) < 0 &&
+                result.Output.IndexOf("No activities found", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                summary = packageName + " " + successText;
+                return true;
+            }
+            summary = failureText + "：" + HumanizeAdbOutput(result.Output);
+            return false;
+        }
+
+        private bool ConfirmSoftwareOperationBeforeStart(SoftwareManagementOperation operation, string packageName)
+        {
+            if (operation == SoftwareManagementOperation.Disable)
+            {
+                return MessageBox.Show(this, "确定要禁用 " + packageName + " 吗？\r\n\r\n禁用系统组件可能影响设备功能。", AppDisplayName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK;
+            }
+            if (operation == SoftwareManagementOperation.ClearData)
+            {
+                return MessageBox.Show(this, "确定要清除 " + packageName + " 的全部应用数据吗？", AppDisplayName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK;
+            }
+            if (operation == SoftwareManagementOperation.Uninstall)
+            {
+                return MessageBox.Show(this, "确定要卸载 " + packageName + " 吗？\r\n\r\n如果检测到系统应用，会在执行前再次确认。", AppDisplayName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK;
+            }
+            if (operation == SoftwareManagementOperation.KeepDataUninstall)
+            {
+                return MessageBox.Show(this, "确定要保留数据卸载 " + packageName + " 吗？", AppDisplayName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK;
+            }
+            if (operation == SoftwareManagementOperation.ToggleUninstallLock)
+            {
+                return MessageBox.Show(this, "卸载锁设置会调用系统私有接口，仅部分 Android 版本可用。\r\n\r\n确定继续处理 " + packageName + " 吗？", AppDisplayName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK;
+            }
+            return true;
+        }
+
+        private string GetSoftwarePackageName()
+        {
+            var packageName = (softwarePackageTextBox.Text ?? "").Trim();
+            if (packageName.Length == 0)
+            {
+                MessageBox.Show(this, "请输入软件包名。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            if (!IsValidAndroidPackageName(packageName))
+            {
+                MessageBox.Show(this, "软件包名格式不正确。\r\n\r\n示例：com.android.settings", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            return packageName;
+        }
+
+        private static bool IsValidAndroidPackageName(string packageName)
+        {
+            return !string.IsNullOrWhiteSpace(packageName) &&
+                   Regex.IsMatch(packageName.Trim(), @"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$");
+        }
+
+        private string GetSoftwareOperationTitle(SoftwareManagementOperation operation)
+        {
+            switch (operation)
+            {
+                case SoftwareManagementOperation.Launch: return "运行软件";
+                case SoftwareManagementOperation.ForceStop: return "强制停止";
+                case SoftwareManagementOperation.ShowInfo: return "读取软件信息";
+                case SoftwareManagementOperation.Disable: return "禁用软件";
+                case SoftwareManagementOperation.Enable: return "启用软件";
+                case SoftwareManagementOperation.ClearData: return "清除数据";
+                case SoftwareManagementOperation.Uninstall: return "卸载软件";
+                case SoftwareManagementOperation.KeepDataUninstall: return "保留数据卸载";
+                case SoftwareManagementOperation.ExtractApk: return "提取安装包";
+                case SoftwareManagementOperation.ToggleUninstallLock: return "卸载锁设置";
+                default: return "软件管理操作";
+            }
+        }
+
+        private bool EnsureSoftwarePackageExists(string adb, string serial, string packageName, out string summary)
+        {
+            List<string> paths;
+            if (TryGetSoftwarePackagePaths(adb, serial, packageName, out paths, out summary)) return true;
+            if (string.IsNullOrWhiteSpace(summary)) summary = packageName + " 不存在，请检查包名。";
+            return false;
+        }
+
+        private bool TryGetSoftwarePackagePaths(string adb, string serial, string packageName, out List<string> paths, out string summary)
+        {
+            paths = new List<string>();
+            summary = "";
+            var result = InvokeProcess(adb, new[] { "-s", serial, "shell", "pm", "path", packageName }, true);
+            if (result.Canceled)
+            {
+                summary = "读取软件路径已中止。";
+                return false;
+            }
+            if (result.ExitCode != 0)
+            {
+                summary = packageName + " 不存在，请检查包名：" + HumanizeAdbOutput(result.Output);
+                return false;
+            }
+
+            foreach (var rawLine in SplitLines(result.Output))
+            {
+                var line = rawLine.Trim();
+                if (!line.StartsWith("package:", StringComparison.OrdinalIgnoreCase)) continue;
+                var path = line.Substring("package:".Length).Trim();
+                if (path.Length > 0) paths.Add(path);
+            }
+
+            if (paths.Count == 0)
+            {
+                summary = packageName + " 不存在，请检查包名。";
+                return false;
+            }
+            return true;
+        }
+
+        private bool ShowSoftwarePackageInfo(string adb, string serial, string packageName, out string summary)
+        {
+            summary = "";
+            List<string> paths;
+            if (!TryGetSoftwarePackagePaths(adb, serial, packageName, out paths, out summary)) return false;
+            if (cancelRequested) return false;
+
+            var result = InvokeProcessQuiet(adb, new[] { "-s", serial, "shell", "dumpsys", "package", packageName }, true);
+            if (result.Canceled)
+            {
+                summary = "读取软件信息已中止。";
+                return false;
+            }
+            if (result.ExitCode != 0)
+            {
+                summary = "读取软件信息失败：" + HumanizeAdbOutput(result.Output);
+                return false;
+            }
+
+            var report = BuildSoftwareInfoReport(packageName, paths, result.Output);
+            BeginInvokeIfNeeded(delegate { ShowSoftwareInfoDialog(packageName, report); });
+            summary = "已读取软件信息：" + packageName;
+            return true;
+        }
+
+        private string BuildSoftwareInfoReport(string packageName, List<string> paths, string dumpsysOutput)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("包名：" + packageName);
+            builder.AppendLine();
+            builder.AppendLine("安装路径：");
+            foreach (var path in paths) builder.AppendLine("  " + path);
+            builder.AppendLine();
+            AppendSoftwareInfoValue(builder, "versionName", dumpsysOutput, @"versionName=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "versionCode", dumpsysOutput, @"versionCode=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "targetSdk", dumpsysOutput, @"targetSdk=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "minSdk", dumpsysOutput, @"minSdk=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "firstInstallTime", dumpsysOutput, @"firstInstallTime=(?<value>[^\r\n]+)");
+            AppendSoftwareInfoValue(builder, "lastUpdateTime", dumpsysOutput, @"lastUpdateTime=(?<value>[^\r\n]+)");
+            AppendSoftwareInfoValue(builder, "primaryCpuAbi", dumpsysOutput, @"primaryCpuAbi=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "enabled", dumpsysOutput, @"enabled=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "stopped", dumpsysOutput, @"stopped=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "hidden", dumpsysOutput, @"hidden=(?<value>[^\s]+)");
+            AppendSoftwareInfoValue(builder, "suspended", dumpsysOutput, @"suspended=(?<value>[^\s]+)");
+
+            var flags = FirstRegexGroup(dumpsysOutput, @"pkgFlags=\[(?<value>[^\]]*)\]", "value");
+            if (!string.IsNullOrWhiteSpace(flags)) builder.AppendLine("pkgFlags：" + flags.Trim());
+            return builder.ToString();
+        }
+
+        private static void AppendSoftwareInfoValue(StringBuilder builder, string title, string text, string pattern)
+        {
+            var value = FirstRegexGroup(text, pattern, "value");
+            if (!string.IsNullOrWhiteSpace(value)) builder.AppendLine(title + "：" + value.Trim());
+        }
+
+        private static string FirstRegexGroup(string text, string pattern, string groupName)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups[groupName].Value : "";
+        }
+
+        private void ShowSoftwareInfoDialog(string packageName, string report)
+        {
+            using (var dialog = new Form())
+            {
+                dialog.Text = "软件信息 - " + packageName;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.Size = new Size(760, 540);
+                dialog.MinimizeBox = false;
+                dialog.MaximizeBox = false;
+                dialog.ShowIcon = false;
+                dialog.Font = Font;
+
+                var panel = new TableLayoutPanel();
+                panel.Dock = DockStyle.Fill;
+                panel.Padding = new Padding(12);
+                panel.ColumnCount = 1;
+                panel.RowCount = 2;
+                panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+                dialog.Controls.Add(panel);
+
+                var infoBox = new TextBox();
+                infoBox.Dock = DockStyle.Fill;
+                infoBox.Multiline = true;
+                infoBox.ReadOnly = true;
+                infoBox.ScrollBars = ScrollBars.Both;
+                infoBox.WordWrap = false;
+                infoBox.Font = new Font("Consolas", 9F);
+                infoBox.Text = report;
+                panel.Controls.Add(infoBox, 0, 0);
+
+                var footer = new TableLayoutPanel();
+                footer.Dock = DockStyle.Fill;
+                footer.ColumnCount = 2;
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+                panel.Controls.Add(footer, 0, 1);
+
+                var closeButton = new Button();
+                closeButton.Text = "关闭";
+                closeButton.DialogResult = DialogResult.OK;
+                closeButton.Dock = DockStyle.Fill;
+                closeButton.Margin = new Padding(8, 4, 0, 0);
+                footer.Controls.Add(closeButton, 1, 0);
+                dialog.AcceptButton = closeButton;
+                dialog.ShowDialog(this);
+            }
+        }
+
+        private bool ExtractSoftwareApk(string adb, string serial, string packageName, out string summary)
+        {
+            summary = "";
+            List<string> paths;
+            if (!TryGetSoftwarePackagePaths(adb, serial, packageName, out paths, out summary)) return false;
+            if (cancelRequested) return false;
+
+            EnsureDirectory(apkExtractDir);
+            var savedFiles = new List<string>();
+            for (var i = 0; i < paths.Count; i++)
+            {
+                if (cancelRequested)
+                {
+                    summary = "提取安装包已中止。";
+                    return false;
+                }
+
+                var remotePath = paths[i];
+                var remoteName = SanitizeLocalFileName(GetDevicePathName(remotePath));
+                var localName = paths.Count == 1 ? packageName + ".apk" : packageName + "-" + remoteName;
+                if (!localName.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)) localName += ".apk";
+                var localPath = GetAvailableLocalFilePath(Path.Combine(apkExtractDir, localName));
+                AddLogLine("提取安装包：" + remotePath + " -> " + localPath);
+                var result = InvokeProcess(adb, new[] { "-s", serial, "pull", remotePath, localPath }, true);
+                if (result.Canceled)
+                {
+                    summary = "提取安装包已中止。";
+                    return false;
+                }
+                if (result.ExitCode != 0 || !File.Exists(localPath))
+                {
+                    summary = "提取安装包失败：" + HumanizeAdbOutput(result.Output);
+                    return false;
+                }
+                savedFiles.Add(localPath);
+            }
+
+            summary = "已提取 " + savedFiles.Count + " 个 APK 到：" + apkExtractDir;
+            return true;
+        }
+
+        private static string GetAvailableLocalFilePath(string path)
+        {
+            if (!File.Exists(path)) return path;
+            var dir = Path.GetDirectoryName(path);
+            var name = Path.GetFileNameWithoutExtension(path);
+            var ext = Path.GetExtension(path);
+            for (var i = 1; i < 1000; i++)
+            {
+                var candidate = Path.Combine(dir, name + "-" + i.ToString() + ext);
+                if (!File.Exists(candidate)) return candidate;
+            }
+            return Path.Combine(dir, name + "-" + DateTime.Now.ToString("yyyyMMddHHmmss") + ext);
+        }
+
+        private bool UninstallSoftwarePackage(string adb, string serial, string packageName, out string summary)
+        {
+            summary = "";
+            var isThirdParty = IsPackageListed(adb, serial, "-3", packageName);
+            if (cancelRequested) return false;
+            if (isThirdParty)
+            {
+                var result = InvokeProcess(adb, new[] { "-s", serial, "uninstall", packageName }, true);
+                if (result.Canceled)
+                {
+                    summary = "卸载已中止。";
+                    return false;
+                }
+                if (result.ExitCode == 0 && result.Output.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    summary = "已卸载 " + packageName + "。";
+                    return true;
+                }
+                summary = "卸载失败：" + HumanizeAdbOutput(result.Output);
+                return false;
+            }
+
+            var isSystem = IsPackageListed(adb, serial, "-s", packageName);
+            if (cancelRequested) return false;
+            if (!isSystem)
+            {
+                summary = packageName + " 不存在，请检查包名。";
+                return false;
+            }
+
+            var confirm = ShowDialogMessage("检测到 " + packageName + " 是系统应用。\r\n\r\n卸载系统应用可能导致无法开机、功能异常或需要清除数据恢复。建议优先使用“禁用”。\r\n\r\n确定仍要按当前用户卸载吗？", "卸载系统软件", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+            if (confirm != DialogResult.OK)
+            {
+                summary = "已取消卸载系统应用：" + packageName;
+                return false;
+            }
+
+            var systemResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "pm", "uninstall", "-k", "--user", "0", packageName }, true);
+            if (systemResult.Canceled)
+            {
+                summary = "卸载系统应用已中止。";
+                return false;
+            }
+            if (systemResult.ExitCode == 0 && systemResult.Output.IndexOf("Success", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                summary = "已按当前用户卸载系统应用 " + packageName + "。";
+                return true;
+            }
+            summary = "卸载系统应用失败：" + HumanizeAdbOutput(systemResult.Output);
+            return false;
+        }
+
+        private bool IsPackageListed(string adb, string serial, string packageType, string packageName)
+        {
+            var result = InvokeProcess(adb, new[] { "-s", serial, "shell", "pm", "list", "packages", packageType, packageName }, true);
+            if (result.Canceled || result.ExitCode != 0) return false;
+            foreach (var rawLine in SplitLines(result.Output))
+            {
+                var line = rawLine.Trim();
+                if (!line.StartsWith("package:", StringComparison.OrdinalIgnoreCase)) continue;
+                var listedPackage = line.Substring("package:".Length).Trim();
+                if (string.Equals(listedPackage, packageName, StringComparison.Ordinal)) return true;
+            }
+            return false;
+        }
+
+        private bool ToggleSoftwareUninstallLock(string adb, string serial, string packageName, out string summary)
+        {
+            summary = "";
+            if (!IsPackageListed(adb, serial, "-3", packageName))
+            {
+                summary = "卸载锁设置仅适用于第三方软件。";
+                return false;
+            }
+            if (cancelRequested) return false;
+
+            var sdkResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "getprop", "ro.build.version.sdk" }, true);
+            if (sdkResult.Canceled)
+            {
+                summary = "读取 Android SDK 版本已中止。";
+                return false;
+            }
+
+            int sdk;
+            if (!int.TryParse(FirstUsefulLine(sdkResult.Output) ?? "", out sdk))
+            {
+                summary = "无法识别 Android SDK 版本。";
+                return false;
+            }
+
+            int transactionCode;
+            if (!TryGetUninstallLockTransactionCode(sdk, out transactionCode))
+            {
+                summary = sdk < 25 ? "本功能不支持 Android 7.1.2 以下系统。" : "本功能不支持 Android 15 及以上系统。";
+                return false;
+            }
+
+            var queryResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "service", "call", "package", transactionCode.ToString(), "s16", packageName, "i32", "0" }, true);
+            if (queryResult.Canceled)
+            {
+                summary = "读取卸载锁状态已中止。";
+                return false;
+            }
+            if (queryResult.ExitCode != 0)
+            {
+                summary = "当前系统不允许读取卸载锁状态：" + HumanizeAdbOutput(queryResult.Output);
+                return false;
+            }
+
+            var blocked = IsServiceCallBooleanTrue(queryResult.Output);
+            var confirmText = blocked ? "当前已禁止卸载 " + packageName + "。\r\n\r\n是否允许卸载？" : "当前允许卸载 " + packageName + "。\r\n\r\n是否禁止卸载？";
+            var confirm = ShowDialogMessage(confirmText, "卸载锁设置", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+            if (confirm != DialogResult.OK)
+            {
+                summary = "已取消卸载锁设置：" + packageName;
+                return false;
+            }
+
+            var nextValue = blocked ? "0" : "1";
+            var setResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "service", "call", "package", transactionCode.ToString(), "s16", packageName, "i32", nextValue, "i32", "0" }, true);
+            if (setResult.Canceled)
+            {
+                summary = "设置卸载锁已中止。";
+                return false;
+            }
+            if (setResult.ExitCode != 0)
+            {
+                summary = "当前系统不允许此操作：" + HumanizeAdbOutput(setResult.Output);
+                return false;
+            }
+
+            summary = blocked ? "已允许卸载 " + packageName + "。" : "已禁止卸载 " + packageName + "。";
+            return true;
+        }
+
+        private static bool TryGetUninstallLockTransactionCode(int sdk, out int transactionCode)
+        {
+            transactionCode = 0;
+            switch (sdk)
+            {
+                case 25: transactionCode = 145; return true;
+                case 26: transactionCode = 151; return true;
+                case 27: transactionCode = 151; return true;
+                case 28: transactionCode = 152; return true;
+                case 29: transactionCode = 151; return true;
+                case 30: transactionCode = 156; return true;
+                case 31: transactionCode = 136; return true;
+                case 32: transactionCode = 136; return true;
+                case 33: transactionCode = 133; return true;
+                case 34: transactionCode = 134; return true;
+                default: return false;
+            }
+        }
+
+        private static bool IsServiceCallBooleanTrue(string output)
+        {
+            if (string.IsNullOrWhiteSpace(output)) return false;
+            return Regex.IsMatch(output, @"\b00000001\b|\b1\b");
+        }
+
+        private void RefreshSoftwareForegroundFromTimer()
+        {
+            if (!CanRefreshSoftwareForeground()) return;
+
+            DeviceInfo device;
+            if (!TryGetSingleCheckedDevice(out device))
+            {
+                softwareManagementStatusLabel.Text = "勾选一台 device 状态设备后可读取当前界面。";
+                return;
+            }
+
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                softwareManagementStatusLabel.Text = "未找到 adb.exe，无法读取当前界面。";
+                return;
+            }
+
+            isSoftwareForegroundRefreshing = true;
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                try
+                {
+                    string error;
+                    var info = ReadForegroundAppInfo(adb, device.Serial, out error);
+                    BeginInvokeIfNeeded(delegate
+                    {
+                        if (info != null)
+                        {
+                            ApplyForegroundAppInfo(info);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(error))
+                        {
+                            softwareManagementStatusLabel.Text = error;
+                        }
+                    });
+                }
+                finally
+                {
+                    isSoftwareForegroundRefreshing = false;
+                }
+            }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private bool CanRefreshSoftwareForeground()
+        {
+            return tabControl.SelectedTab == softwareManagementTab &&
+                   !isSoftwareForegroundRefreshing &&
+                   !isExecuting &&
+                   !isDeviceCommandRunning &&
+                   !isLogcatRunning &&
+                   !IsMediaCaptureRunning;
+        }
+
+        private void UpdateSoftwareForegroundTimerState()
+        {
+            if (tabControl.SelectedTab == softwareManagementTab)
+            {
+                if (!softwareForegroundTimer.Enabled) softwareForegroundTimer.Start();
+                RefreshSoftwareForegroundFromTimer();
+            }
+            else if (softwareForegroundTimer.Enabled)
+            {
+                softwareForegroundTimer.Stop();
+            }
+        }
+
+        private ForegroundAppInfo ReadForegroundAppInfo(string adb, string serial, out string error)
+        {
+            error = "";
+            var windowResult = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "dumpsys", "window", "windows" }, 4500);
+            if (windowResult.ExitCode == 0)
+            {
+                var info = ParseForegroundAppInfo(windowResult.Output);
+                if (info != null) return info;
+            }
+
+            var windowFallbackResult = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "dumpsys", "window" }, 4500);
+            if (windowFallbackResult.ExitCode == 0)
+            {
+                var info = ParseForegroundAppInfo(windowFallbackResult.Output);
+                if (info != null) return info;
+            }
+
+            var activityResult = InvokeProcessSilent(adb, new[] { "-s", serial, "shell", "dumpsys", "activity", "activities" }, 4500);
+            if (activityResult.ExitCode == 0)
+            {
+                var info = ParseForegroundAppInfo(activityResult.Output);
+                if (info != null) return info;
+            }
+
+            var firstError = FirstUsefulLine(windowResult.Output) ?? FirstUsefulLine(windowFallbackResult.Output) ?? FirstUsefulLine(activityResult.Output);
+            error = string.IsNullOrWhiteSpace(firstError) ? "未能解析当前界面包名和活动。" : "读取当前界面失败：" + firstError;
+            return null;
+        }
+
+        private ForegroundAppInfo ParseForegroundAppInfo(string output)
+        {
+            if (string.IsNullOrWhiteSpace(output)) return null;
+            var keys = new[] { "mCurrentFocus", "mFocusedApp", "mResumedActivity", "topResumedActivity", "ResumedActivity" };
+            var lines = SplitLines(output);
+            foreach (var key in keys)
+            {
+                foreach (var rawLine in lines)
+                {
+                    var line = rawLine.Trim();
+                    if (line.IndexOf(key, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    var info = ExtractForegroundComponent(line);
+                    if (info != null) return info;
+                }
+            }
+
+            foreach (var rawLine in lines)
+            {
+                var info = ExtractForegroundComponent(rawLine);
+                if (info != null) return info;
+            }
+            return null;
+        }
+
+        private ForegroundAppInfo ExtractForegroundComponent(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            var match = Regex.Match(text, @"(?<pkg>[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)/(?<act>[A-Za-z0-9_.$]+|\.[A-Za-z0-9_.$]+)");
+            if (!match.Success) return null;
+            var packageName = match.Groups["pkg"].Value;
+            var activityName = match.Groups["act"].Value;
+            if (activityName.StartsWith(".", StringComparison.Ordinal)) activityName = packageName + activityName;
+            return new ForegroundAppInfo { PackageName = packageName, ActivityName = activityName };
+        }
+
+        private void ApplyForegroundAppInfo(ForegroundAppInfo info)
+        {
+            if (info == null) return;
+            softwareForegroundPackageTextBox.Text = info.PackageName;
+            softwareForegroundActivityTextBox.Text = info.ActivityName;
+            if (softwareAutoFillCheckBox.Checked && !string.IsNullOrWhiteSpace(info.PackageName))
+            {
+                softwarePackageTextBox.Text = info.PackageName;
+            }
+            softwareManagementStatusLabel.Text = string.IsNullOrWhiteSpace(info.PackageName) ? "未识别当前界面包名。" : "当前界面：" + info.PackageName;
+        }
+
+        private void SetSoftwareManagementStatus(string text)
+        {
+            BeginInvokeIfNeeded(delegate { softwareManagementStatusLabel.Text = text; });
+        }
+
+        private DialogResult ShowDialogMessage(string text, string caption, MessageBoxButtons buttons, MessageBoxIcon icon)
+        {
+            if (IsDisposed) return DialogResult.Cancel;
+            if (InvokeRequired)
+            {
+                var result = DialogResult.Cancel;
+                try
+                {
+                    Invoke(new MethodInvoker(delegate { result = MessageBox.Show(this, text, caption, buttons, icon); }));
+                }
+                catch
+                {
+                    result = DialogResult.Cancel;
+                }
+                return result;
+            }
+            return MessageBox.Show(this, text, caption, buttons, icon);
         }
 
         private static string NormalizeAdbAddress(string input)
@@ -4310,6 +5288,12 @@ namespace AdbTool
 
                 var lastApkPath = ReadJsonString(json, "lastApkPath");
                 if (!string.IsNullOrEmpty(lastApkPath) && File.Exists(lastApkPath)) apkTextBox.Text = lastApkPath;
+
+                var softwarePackageName = ReadJsonString(json, "softwarePackageName");
+                if (softwarePackageName != null) softwarePackageTextBox.Text = softwarePackageName;
+
+                var softwareAutoFill = ReadJsonBool(json, "softwareAutoFill");
+                if (softwareAutoFill.HasValue) softwareAutoFillCheckBox.Checked = softwareAutoFill.Value;
 
                 var logRecordOutputPath = ReadJsonString(json, "logRecordOutputPath");
                 if (!string.IsNullOrWhiteSpace(logRecordOutputPath) && !IsLegacyAppRuntimePath(logRecordOutputPath, "log")) logRecordPathTextBox.Text = logRecordOutputPath;
@@ -4383,6 +5367,8 @@ namespace AdbTool
                     "    \"adbPath\":  \"" + EscapeJsonString(configuredAdbPath) + "\",\r\n" +
                     "    \"aaptPath\":  \"" + EscapeJsonString(configuredAaptPath) + "\",\r\n" +
                     "    \"lastApkPath\":  \"" + EscapeJsonString(lastApkPath) + "\",\r\n" +
+                    "    \"softwarePackageName\":  \"" + EscapeJsonString(softwarePackageTextBox.Text) + "\",\r\n" +
+                    "    \"softwareAutoFill\":  " + (softwareAutoFillCheckBox.Checked ? "true" : "false") + ",\r\n" +
                     "    \"windowWidth\":  " + windowSize.Width.ToString() + ",\r\n" +
                     "    \"windowHeight\":  " + windowSize.Height.ToString() + ",\r\n" +
                     "    \"layoutTabHeight\":  " + savedTabAreaHeight.ToString() + ",\r\n" +
@@ -5346,6 +6332,11 @@ namespace AdbTool
 
         private ProcessResult InvokeProcessSilent(string filePath, string[] arguments)
         {
+            return InvokeProcessSilent(filePath, arguments, 0);
+        }
+
+        private ProcessResult InvokeProcessSilent(string filePath, string[] arguments, int timeoutMilliseconds)
+        {
             var outputBuilder = new StringBuilder();
             var startInfo = new ProcessStartInfo();
             startInfo.FileName = filePath;
@@ -5363,7 +6354,23 @@ namespace AdbTool
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
-                process.WaitForExit();
+                if (timeoutMilliseconds > 0)
+                {
+                    var waitUntil = DateTime.Now.AddMilliseconds(timeoutMilliseconds);
+                    while (!process.WaitForExit(100))
+                    {
+                        if (DateTime.Now >= waitUntil)
+                        {
+                            TryKill(process);
+                            return new ProcessResult { ExitCode = 124, Output = outputBuilder.ToString(), Canceled = false };
+                        }
+                    }
+                }
+                else
+                {
+                    process.WaitForExit();
+                }
+                try { process.WaitForExit(); } catch { }
                 return new ProcessResult { ExitCode = process.ExitCode, Output = outputBuilder.ToString(), Canceled = false };
             }
             catch (Exception ex) { return new ProcessResult { ExitCode = 1, Output = ex.Message, Canceled = false }; }
@@ -5459,6 +6466,7 @@ namespace AdbTool
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
+            SetSoftwareManagementControlsEnabled(!busy);
             cancelButton.Enabled = executing || isDeviceCommandRunning || IsMediaCaptureRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             statusLabel.Text = executing ? "正在执行..." : statusLabel.Text;
@@ -5508,6 +6516,7 @@ namespace AdbTool
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
+            SetSoftwareManagementControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenRecordRunning;
             Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
             if (running)
@@ -5519,6 +6528,7 @@ namespace AdbTool
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
         {
+            softwareForegroundTimer.Stop();
             CaptureLayoutHeights();
             SaveConfig();
             if (isScreenRecordRunning)
