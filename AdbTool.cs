@@ -6,6 +6,7 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -30,10 +31,14 @@ namespace AdbTool
         private const string ConfigFileName = "adb-tool.config.json";
         private const string RunLogPrefix = "adb-tool";
         private const string RemoteTempFilePrefix = "adb-tool";
+        private const string ApkStageDirName = "ApkStage";
         private const int DisplayScaleTrackBarMaximum = 100;
         private const int DisplayScaleTrackBarDefaultValue = 25;
         private const double DisplayScaleStep = 0.04;
         private const double DefaultDisplayScale = 1.0;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern int GetShortPathName(string longPath, StringBuilder shortPath, int bufferLength);
 
         private enum TransferDirection
         {
@@ -67,6 +72,14 @@ namespace AdbTool
             public bool HasTimeLimit;
             public int TimeLimitSeconds;
             public int BitRate;
+        }
+
+        private sealed class ApkStageInfo
+        {
+            public string SourcePath = "";
+            public string StagePath = "";
+            public long Length;
+            public DateTime LastWriteUtc;
         }
 
         private sealed class DisplayControlInfo
@@ -259,6 +272,7 @@ namespace AdbTool
         private readonly string logDir;
         private readonly string screenshotDir;
         private readonly string apkExtractDir;
+        private readonly string apkStageDir;
         private const int DefaultTabAreaHeight = 300;
         private const int DefaultDeviceAreaHeight = 162;
         private const int DefaultLogAreaHeight = 376;
@@ -298,6 +312,8 @@ namespace AdbTool
         private string lastPullTargetDir = "";
         private string lastCapturePath = "";
         private CaptureMediaType lastCaptureType = CaptureMediaType.None;
+        private ApkStageInfo currentApkStageInfo;
+        private bool apkStageCleanupDone;
         private string screenRecordCurrentSerial = "";
         private string screenRecordCurrentDeviceLabel = "";
         private int screenRecordCurrentTimeLimitSeconds;
@@ -323,6 +339,7 @@ namespace AdbTool
             logDir = Path.Combine(userDataDir, "log");
             screenshotDir = GetDefaultScreenshotDir(appDir);
             apkExtractDir = Path.Combine(userDataDir, "ApkExt");
+            apkStageDir = Path.Combine(userDataDir, ApkStageDirName);
             Text = AppDisplayName;
             ApplyWindowIcon();
             StartPosition = FormStartPosition.CenterScreen;
@@ -479,11 +496,12 @@ namespace AdbTool
 
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Top;
-            panel.Height = 258;
+            panel.Height = 274;
             panel.ColumnCount = 1;
-            panel.RowCount = 5;
+            panel.RowCount = 6;
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -518,8 +536,8 @@ namespace AdbTool
             packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             packagePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 8));
-            panel.Controls.Add(packagePanel, 0, 2);
-            AddLabel(packagePanel, "软件包名", 0);
+            panel.Controls.Add(packagePanel, 0, 3);
+            AddLabel(packagePanel, "目标包名", 0);
             ConfigureSoftwareTextBox(softwarePackageTextBox, false);
             packagePanel.Controls.Add(softwarePackageTextBox, 1, 0);
             softwareAutoFillCheckBox.Text = "自动填充";
@@ -534,7 +552,7 @@ namespace AdbTool
             actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
             actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
             actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
-            panel.Controls.Add(actionsPanel, 0, 3);
+            panel.Controls.Add(actionsPanel, 0, 4);
 
             FlowLayoutPanel basicPanel;
             var basicGroup = CreateSoftwareActionGroup("基础操作", out basicPanel);
@@ -558,14 +576,14 @@ namespace AdbTool
             AddSoftwareActionButton(dangerPanel, softwareUninstallLockButton, "卸载锁设置");
             actionsPanel.Controls.Add(dangerGroup, 2, 0);
 
-            softwareManagementStatusLabel.Text = "请勾选一台 device 状态设备，并输入软件包名；切换到本页后会读取当前界面包名和活动。";
+            softwareManagementStatusLabel.Text = "请勾选一台 device 状态设备，并输入目标包名；切换到本页后会读取当前界面包名和活动。";
             softwareManagementStatusLabel.Dock = DockStyle.Fill;
             softwareManagementStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             softwareManagementStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
             softwareManagementStatusLabel.AutoEllipsis = true;
-            panel.Controls.Add(softwareManagementStatusLabel, 0, 4);
+            panel.Controls.Add(softwareManagementStatusLabel, 0, 5);
 
-            softwareManagementToolTip.SetToolTip(softwareAutoFillCheckBox, "开启后会把当前界面包名自动填入软件包名。");
+            softwareManagementToolTip.SetToolTip(softwareAutoFillCheckBox, "开启后会把当前界面包名自动填入目标包名。");
             softwareManagementToolTip.SetToolTip(softwareLaunchButton, "使用 monkey 启动该包名的默认入口。");
             softwareManagementToolTip.SetToolTip(softwareForceStopButton, "执行 am force-stop。");
             softwareManagementToolTip.SetToolTip(softwareInfoButton, "读取 dumpsys package 中的版本、路径和状态摘要。");
@@ -4668,12 +4686,12 @@ namespace AdbTool
             var packageName = (softwarePackageTextBox.Text ?? "").Trim();
             if (packageName.Length == 0)
             {
-                MessageBox.Show(this, "请输入软件包名。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "请输入目标包名。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             if (!IsValidAndroidPackageName(packageName))
             {
-                MessageBox.Show(this, "软件包名格式不正确。\r\n\r\n示例：com.android.settings", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "目标包名格式不正确。\r\n\r\n示例：com.android.settings", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return null;
             }
             return packageName;
@@ -5954,6 +5972,220 @@ namespace AdbTool
             return "'" + value.Replace("'", "'\\''") + "'";
         }
 
+        private string PrepareApkToolPath(string apkPath, out string error)
+        {
+            error = "";
+            if (string.IsNullOrWhiteSpace(apkPath))
+            {
+                error = "APK 文件路径为空。";
+                return null;
+            }
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(apkPath);
+            }
+            catch (Exception ex)
+            {
+                error = "APK 文件路径无效：" + ex.Message;
+                return null;
+            }
+
+            if (!File.Exists(fullPath))
+            {
+                error = "APK 文件不存在。";
+                return null;
+            }
+
+            var compatiblePath = GetToolCompatibleExistingPath(fullPath);
+            if (!string.IsNullOrEmpty(compatiblePath)) return compatiblePath;
+            return PrepareStagedApkToolPath(fullPath, out error);
+        }
+
+        private string PrepareStagedApkToolPath(string sourcePath, out string error)
+        {
+            error = "";
+            FileInfo sourceInfo;
+            try
+            {
+                sourceInfo = new FileInfo(sourcePath);
+            }
+            catch (Exception ex)
+            {
+                error = "读取 APK 文件信息失败：" + ex.Message;
+                return null;
+            }
+
+            if (currentApkStageInfo != null
+                && string.Equals(currentApkStageInfo.SourcePath, sourcePath, StringComparison.OrdinalIgnoreCase)
+                && currentApkStageInfo.Length == sourceInfo.Length
+                && currentApkStageInfo.LastWriteUtc == sourceInfo.LastWriteTimeUtc
+                && File.Exists(currentApkStageInfo.StagePath))
+            {
+                return currentApkStageInfo.StagePath;
+            }
+
+            var stageDir = FindWritableApkStageDir(out error);
+            if (string.IsNullOrEmpty(stageDir)) return null;
+            CleanupOldApkStageFiles(stageDir);
+
+            var stagePath = Path.Combine(stageDir, BuildApkStageFileName(sourcePath, sourceInfo));
+            try
+            {
+                File.Copy(sourcePath, stagePath, true);
+                var stageInfo = new FileInfo(stagePath);
+                if (stageInfo.Length != sourceInfo.Length)
+                {
+                    error = "APK 临时副本大小不一致，请重试。";
+                    return null;
+                }
+
+                currentApkStageInfo = new ApkStageInfo
+                {
+                    SourcePath = sourcePath,
+                    StagePath = stagePath,
+                    Length = sourceInfo.Length,
+                    LastWriteUtc = sourceInfo.LastWriteTimeUtc
+                };
+                return stagePath;
+            }
+            catch (Exception ex)
+            {
+                error = "无法为 adb/aapt 创建 APK 临时副本：" + ex.Message;
+                return null;
+            }
+        }
+
+        private string FindWritableApkStageDir(out string error)
+        {
+            error = "";
+            var candidates = new List<string>();
+            candidates.Add(apkStageDir);
+
+            var tempPath = Path.GetTempPath();
+            if (!string.IsNullOrWhiteSpace(tempPath)) candidates.Add(Path.Combine(tempPath, "ADBTool", ApkStageDirName));
+
+            candidates.Add(Path.Combine(appDir, ApkStageDirName));
+
+            var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+            if (!string.IsNullOrWhiteSpace(commonData)) candidates.Add(Path.Combine(commonData, "ADBTool", ApkStageDirName));
+
+            var appRoot = Path.GetPathRoot(appDir);
+            if (!string.IsNullOrWhiteSpace(appRoot)) candidates.Add(Path.Combine(appRoot, "ADBTool", ApkStageDirName));
+
+            foreach (var candidate in candidates.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                string compatibleDir;
+                if (TryPrepareWritableCompatibleDirectory(candidate, out compatibleDir)) return compatibleDir;
+            }
+
+            error = "无法创建仅包含英文字符的临时目录。请将工具放在可写英文路径，或把 APK 移到英文路径后重试。";
+            return null;
+        }
+
+        private static bool TryPrepareWritableCompatibleDirectory(string directory, out string compatibleDirectory)
+        {
+            compatibleDirectory = null;
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var testPath = Path.Combine(directory, ".write-test-" + Guid.NewGuid().ToString("N") + ".tmp");
+                using (File.Create(testPath)) { }
+                SafeDeleteFile(testPath);
+
+                compatibleDirectory = GetToolCompatibleExistingPath(directory);
+                return !string.IsNullOrEmpty(compatibleDirectory);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void CleanupOldApkStageFiles(string stageDir)
+        {
+            if (apkStageCleanupDone) return;
+            apkStageCleanupDone = true;
+            try
+            {
+                var cutoff = DateTime.UtcNow.AddDays(-3);
+                foreach (var file in Directory.GetFiles(stageDir, "apk-*.apk"))
+                {
+                    try
+                    {
+                        if (File.GetLastWriteTimeUtc(file) < cutoff) File.Delete(file);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        private static string BuildApkStageFileName(string sourcePath, FileInfo sourceInfo)
+        {
+            return "apk-"
+                + ComputePathHash(sourcePath).ToString("x8", CultureInfo.InvariantCulture)
+                + "-"
+                + sourceInfo.Length.ToString(CultureInfo.InvariantCulture)
+                + "-"
+                + sourceInfo.LastWriteTimeUtc.Ticks.ToString("x", CultureInfo.InvariantCulture)
+                + ".apk";
+        }
+
+        private static uint ComputePathHash(string value)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                foreach (var b in Encoding.UTF8.GetBytes(value ?? ""))
+                {
+                    hash ^= b;
+                    hash *= 16777619;
+                }
+                return hash;
+            }
+        }
+
+        private static string GetToolCompatibleExistingPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            if (IsAsciiToolPath(path)) return path;
+            return TryGetShortAsciiPath(path);
+        }
+
+        private static string TryGetShortAsciiPath(string path)
+        {
+            try
+            {
+                var buffer = new StringBuilder(260);
+                var length = GetShortPathName(path, buffer, buffer.Capacity);
+                if (length > buffer.Capacity)
+                {
+                    buffer = new StringBuilder(length + 1);
+                    length = GetShortPathName(path, buffer, buffer.Capacity);
+                }
+                if (length <= 0) return null;
+
+                var shortPath = buffer.ToString();
+                return IsAsciiToolPath(shortPath) ? shortPath : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool IsAsciiToolPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            foreach (var ch in path)
+            {
+                if (ch < 32 || ch > 126) return false;
+            }
+            return true;
+        }
+
         private void UpdateApkInfo(string apkPath)
         {
             if (string.IsNullOrWhiteSpace(apkPath)) { currentApkInfo = null; apkInfoLabel.Text = "请选择 APK 文件。"; return; }
@@ -5976,7 +6208,12 @@ namespace AdbTool
             var info = new ApkInfo();
             var aapt = FindAapt();
             if (aapt == null) { info.ParseError = GetMissingAaptMessage().Replace("\r\n\r\n", " "); return info; }
-            var result = InvokeProcess(aapt, new[] { "dump", "badging", apkPath }, false);
+
+            string apkToolPathError;
+            var apkToolPath = PrepareApkToolPath(apkPath, out apkToolPathError);
+            if (string.IsNullOrEmpty(apkToolPath)) { info.ParseError = apkToolPathError; return info; }
+
+            var result = InvokeProcess(aapt, new[] { "dump", "badging", apkToolPath }, false);
             if (result.ExitCode != 0) { info.ParseError = FirstUsefulLine(result.Output) ?? "aapt/aapt2 执行失败。"; return info; }
             var packageMatch = Regex.Match(result.Output, @"package: name='(?<name>[^']+)'\s+versionCode='(?<code>[^']*)'\s+versionName='(?<version>[^']*)'");
             if (packageMatch.Success)
@@ -6106,6 +6343,13 @@ namespace AdbTool
             }
             var mode = GetExecutionMode();
             var launchAfterInstall = launchAfterInstallCheckBox.Checked;
+            string apkToolPathError;
+            var apkToolPath = PrepareApkToolPath(apkPath, out apkToolPathError);
+            if (string.IsNullOrEmpty(apkToolPath))
+            {
+                MessageBox.Show(this, "无法为 adb/aapt 准备 APK 文件。\r\n\r\n" + apkToolPathError, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             var apkInfo = currentApkInfo ?? GetApkInfo(apkPath);
             if ((mode != "Install" || launchAfterInstall) && string.IsNullOrEmpty(apkInfo.PackageName))
             {
@@ -6118,12 +6362,12 @@ namespace AdbTool
             cancelRequested = false;
             isExecuting = true;
             SetExecutingUi(true);
-            var thread = new Thread(new ThreadStart(delegate { ExecuteOnDevices(adb, apkPath, apkInfo, checkedItems, mode, launchAfterInstall); }));
+            var thread = new Thread(new ThreadStart(delegate { ExecuteOnDevices(adb, apkPath, apkToolPath, apkInfo, checkedItems, mode, launchAfterInstall); }));
             thread.IsBackground = true;
             thread.Start();
         }
 
-        private void ExecuteOnDevices(string adb, string apkPath, ApkInfo apkInfo, List<string> checkedItems, string mode, bool launchAfterInstall)
+        private void ExecuteOnDevices(string adb, string apkPath, string apkToolPath, ApkInfo apkInfo, List<string> checkedItems, string mode, bool launchAfterInstall)
         {
             var successCount = 0;
             var failedCount = 0;
@@ -6131,6 +6375,7 @@ namespace AdbTool
             try
             {
                 AddLogLine("开始执行，APK：" + apkPath);
+                if (!string.Equals(apkPath, apkToolPath, StringComparison.OrdinalIgnoreCase)) AddLogLine("已使用兼容路径执行 adb/aapt：" + apkToolPath);
                 for (var index = 0; index < checkedItems.Count; index++)
                 {
                     if (cancelRequested) { AddLogLine("用户已中止，停止后续设备操作。"); break; }
@@ -6139,7 +6384,7 @@ namespace AdbTool
                     if (!deviceMap.TryGetValue(label, out device)) { AddLogLine("跳过未知设备：" + label); skippedCount++; continue; }
                     AddLogLine("[" + (index + 1) + "/" + checkedItems.Count + "] 处理设备：" + label);
                     if (device.State != "device") { AddLogLine("设备不可用，状态为 " + device.State + "。请检查 USB 调试授权。"); skippedCount++; continue; }
-                    var ok = ExecuteForDevice(adb, apkPath, apkInfo, device.Serial, mode, launchAfterInstall);
+                    var ok = ExecuteForDevice(adb, apkToolPath, apkInfo, device.Serial, mode, launchAfterInstall);
                     if (cancelRequested) break;
                     if (ok) successCount++; else failedCount++;
                 }
@@ -6687,8 +6932,38 @@ namespace AdbTool
         private static string QuoteArgument(string argument)
         {
             if (argument == null || argument.Length == 0) return "\"\"";
-            if (argument.IndexOfAny(new[] { ' ', '\t', '"', '&', '(', ')', '[', ']', '{', '}', '^', ';' }) < 0) return argument;
-            return "\"" + argument.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            if (argument.IndexOfAny(new[] { ' ', '\t', '\r', '\n', '"' }) < 0) return argument;
+
+            var builder = new StringBuilder();
+            builder.Append('"');
+            var backslashCount = 0;
+            foreach (var ch in argument)
+            {
+                if (ch == '\\')
+                {
+                    backslashCount++;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    builder.Append('\\', backslashCount * 2 + 1);
+                    builder.Append('"');
+                    backslashCount = 0;
+                    continue;
+                }
+
+                if (backslashCount > 0)
+                {
+                    builder.Append('\\', backslashCount);
+                    backslashCount = 0;
+                }
+                builder.Append(ch);
+            }
+
+            if (backslashCount > 0) builder.Append('\\', backslashCount * 2);
+            builder.Append('"');
+            return builder.ToString();
         }
 
         private static IEnumerable<string> SplitLines(string text) { return (text ?? "").Split(new[] { "\r\n", "\n" }, StringSplitOptions.None); }
