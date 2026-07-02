@@ -63,8 +63,7 @@ namespace AdbTool
             ClearData,
             Uninstall,
             KeepDataUninstall,
-            ExtractApk,
-            ToggleUninstallLock
+            ExtractApk
         }
 
         private sealed class ScreenRecordOptions
@@ -142,13 +141,13 @@ namespace AdbTool
         private readonly TabControl tabControl = new TabControl();
         private readonly SplitContainer mainSplitContainer = new SplitContainer();
         private readonly SplitContainer lowerSplitContainer = new SplitContainer();
-        private readonly TabPage installTab = new TabPage("APK 安装");
-        private readonly TabPage softwareManagementTab = new TabPage("软件管理");
-        private readonly TabPage deviceInfoTab = new TabPage("设备概览");
-        private readonly TabPage displayControlTab = new TabPage("显示控制");
-        private readonly TabPage logRecordTab = new TabPage("日志录制");
+        private readonly TabPage installTab = new TabPage("APK安装");
         private readonly TabPage fileTransferTab = new TabPage("文件传输");
         private readonly TabPage screenshotTab = new TabPage("截屏/录屏");
+        private readonly TabPage logRecordTab = new TabPage("日志录制");
+        private readonly TabPage softwareManagementTab = new TabPage("软件管理");
+        private readonly TabPage displayControlTab = new TabPage("显示控制");
+        private readonly TabPage deviceInfoTab = new TabPage("设备概览");
         private readonly TextBox apkTextBox = new TextBox();
         private readonly Button browseButton = new Button();
         private readonly Button refreshButton = new Button();
@@ -181,7 +180,6 @@ namespace AdbTool
         private readonly Button softwareUninstallButton = new Button();
         private readonly Button softwareKeepDataUninstallButton = new Button();
         private readonly Button softwareExtractApkButton = new Button();
-        private readonly Button softwareUninstallLockButton = new Button();
         private readonly Label softwareManagementStatusLabel = new Label();
         private readonly System.Windows.Forms.Timer softwareForegroundTimer = new System.Windows.Forms.Timer();
         private readonly ToolTip softwareManagementToolTip = new ToolTip();
@@ -392,12 +390,12 @@ namespace AdbTool
 
             tabControl.Dock = DockStyle.Fill;
             tabControl.TabPages.Add(installTab);
-            tabControl.TabPages.Add(softwareManagementTab);
-            tabControl.TabPages.Add(deviceInfoTab);
-            tabControl.TabPages.Add(displayControlTab);
-            tabControl.TabPages.Add(logRecordTab);
             tabControl.TabPages.Add(fileTransferTab);
             tabControl.TabPages.Add(screenshotTab);
+            tabControl.TabPages.Add(logRecordTab);
+            tabControl.TabPages.Add(softwareManagementTab);
+            tabControl.TabPages.Add(displayControlTab);
+            tabControl.TabPages.Add(deviceInfoTab);
             mainSplitContainer.Panel1.Controls.Add(tabControl);
 
             lowerSplitContainer.Dock = DockStyle.Fill;
@@ -408,12 +406,12 @@ namespace AdbTool
             mainSplitContainer.Panel2.Controls.Add(lowerSplitContainer);
 
             BuildInstallTab();
-            BuildSoftwareManagementTab();
-            BuildDeviceInfoTab();
-            BuildDisplayControlTab();
-            BuildLogRecordTab();
             BuildFileTransferTab();
             BuildScreenshotTab();
+            BuildLogRecordTab();
+            BuildSoftwareManagementTab();
+            BuildDisplayControlTab();
+            BuildDeviceInfoTab();
             BuildSharedDeviceArea(lowerSplitContainer.Panel1);
             BuildSharedLogArea(lowerSplitContainer.Panel2);
         }
@@ -573,7 +571,6 @@ namespace AdbTool
             var dangerGroup = CreateSoftwareActionGroup("卸载与高级", out dangerPanel);
             AddSoftwareActionButton(dangerPanel, softwareUninstallButton, "卸载");
             AddSoftwareActionButton(dangerPanel, softwareKeepDataUninstallButton, "保留数据卸载");
-            AddSoftwareActionButton(dangerPanel, softwareUninstallLockButton, "卸载锁设置");
             actionsPanel.Controls.Add(dangerGroup, 2, 0);
 
             softwareManagementStatusLabel.Text = "请勾选一台 device 状态设备，并输入目标包名；切换到本页后会读取当前界面包名和活动。";
@@ -593,7 +590,6 @@ namespace AdbTool
             softwareManagementToolTip.SetToolTip(softwareClearDataButton, "执行 pm clear，会清除应用数据。");
             softwareManagementToolTip.SetToolTip(softwareUninstallButton, "第三方应用正常卸载；系统应用需高风险确认后按当前用户卸载。");
             softwareManagementToolTip.SetToolTip(softwareKeepDataUninstallButton, "执行 pm uninstall -k，保留应用数据卸载。");
-            softwareManagementToolTip.SetToolTip(softwareUninstallLockButton, "仅部分 Android 版本和第三方应用支持。");
         }
 
         private void ConfigureSoftwareTextBox(TextBox textBox, bool readOnly)
@@ -1616,7 +1612,6 @@ namespace AdbTool
             softwareUninstallButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Uninstall); };
             softwareKeepDataUninstallButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.KeepDataUninstall); };
             softwareExtractApkButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ExtractApk); };
-            softwareUninstallLockButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ToggleUninstallLock); };
             queryDeviceInfoButton.Click += delegate { StartDeviceInfoRefresh(); };
             browseLogRecordFileButton.Click += delegate { BrowseLogRecordFile(); };
             browseLogRecordFolderButton.Click += delegate { BrowseLogRecordFolder(); };
@@ -3336,7 +3331,6 @@ namespace AdbTool
             softwareUninstallButton.Enabled = enabled;
             softwareKeepDataUninstallButton.Enabled = enabled;
             softwareExtractApkButton.Enabled = enabled;
-            softwareUninstallLockButton.Enabled = enabled;
             UpdateSoftwareAutoFillState();
         }
 
@@ -4587,7 +4581,6 @@ namespace AdbTool
             if (operation == SoftwareManagementOperation.ShowInfo) return ShowSoftwarePackageInfo(adb, serial, packageName, out summary);
             if (operation == SoftwareManagementOperation.ExtractApk) return ExtractSoftwareApk(adb, serial, packageName, out summary);
             if (operation == SoftwareManagementOperation.Uninstall) return UninstallSoftwarePackage(adb, serial, packageName, out summary);
-            if (operation == SoftwareManagementOperation.ToggleUninstallLock) return ToggleSoftwareUninstallLock(adb, serial, packageName, out summary);
 
             if (!EnsureSoftwarePackageExists(adb, serial, packageName, out summary)) return false;
             if (cancelRequested) return false;
@@ -4674,10 +4667,6 @@ namespace AdbTool
             {
                 return MessageBox.Show(this, "确定要保留数据卸载 " + packageName + " 吗？", AppDisplayName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK;
             }
-            if (operation == SoftwareManagementOperation.ToggleUninstallLock)
-            {
-                return MessageBox.Show(this, "卸载锁设置会调用系统私有接口，仅部分 Android 版本可用。\r\n\r\n确定继续处理 " + packageName + " 吗？", AppDisplayName, MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) == DialogResult.OK;
-            }
             return true;
         }
 
@@ -4716,7 +4705,6 @@ namespace AdbTool
                 case SoftwareManagementOperation.Uninstall: return "卸载软件";
                 case SoftwareManagementOperation.KeepDataUninstall: return "保留数据卸载";
                 case SoftwareManagementOperation.ExtractApk: return "提取安装包";
-                case SoftwareManagementOperation.ToggleUninstallLock: return "卸载锁设置";
                 default: return "软件管理操作";
             }
         }
@@ -4992,100 +4980,6 @@ namespace AdbTool
                 if (string.Equals(listedPackage, packageName, StringComparison.Ordinal)) return true;
             }
             return false;
-        }
-
-        private bool ToggleSoftwareUninstallLock(string adb, string serial, string packageName, out string summary)
-        {
-            summary = "";
-            if (!IsPackageListed(adb, serial, "-3", packageName))
-            {
-                summary = "卸载锁设置仅适用于第三方软件。";
-                return false;
-            }
-            if (cancelRequested) return false;
-
-            var sdkResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "getprop", "ro.build.version.sdk" }, true);
-            if (sdkResult.Canceled)
-            {
-                summary = "读取 Android SDK 版本已中止。";
-                return false;
-            }
-
-            int sdk;
-            if (!int.TryParse(FirstUsefulLine(sdkResult.Output) ?? "", out sdk))
-            {
-                summary = "无法识别 Android SDK 版本。";
-                return false;
-            }
-
-            int transactionCode;
-            if (!TryGetUninstallLockTransactionCode(sdk, out transactionCode))
-            {
-                summary = sdk < 25 ? "本功能不支持 Android 7.1.2 以下系统。" : "本功能不支持 Android 15 及以上系统。";
-                return false;
-            }
-
-            var queryResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "service", "call", "package", transactionCode.ToString(), "s16", packageName, "i32", "0" }, true);
-            if (queryResult.Canceled)
-            {
-                summary = "读取卸载锁状态已中止。";
-                return false;
-            }
-            if (queryResult.ExitCode != 0)
-            {
-                summary = "当前系统不允许读取卸载锁状态：" + HumanizeAdbOutput(queryResult.Output);
-                return false;
-            }
-
-            var blocked = IsServiceCallBooleanTrue(queryResult.Output);
-            var confirmText = blocked ? "当前已禁止卸载 " + packageName + "。\r\n\r\n是否允许卸载？" : "当前允许卸载 " + packageName + "。\r\n\r\n是否禁止卸载？";
-            var confirm = ShowDialogMessage(confirmText, "卸载锁设置", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
-            if (confirm != DialogResult.OK)
-            {
-                summary = "已取消卸载锁设置：" + packageName;
-                return false;
-            }
-
-            var nextValue = blocked ? "0" : "1";
-            var setResult = InvokeProcess(adb, new[] { "-s", serial, "shell", "service", "call", "package", transactionCode.ToString(), "s16", packageName, "i32", nextValue, "i32", "0" }, true);
-            if (setResult.Canceled)
-            {
-                summary = "设置卸载锁已中止。";
-                return false;
-            }
-            if (setResult.ExitCode != 0)
-            {
-                summary = "当前系统不允许此操作：" + HumanizeAdbOutput(setResult.Output);
-                return false;
-            }
-
-            summary = blocked ? "已允许卸载 " + packageName + "。" : "已禁止卸载 " + packageName + "。";
-            return true;
-        }
-
-        private static bool TryGetUninstallLockTransactionCode(int sdk, out int transactionCode)
-        {
-            transactionCode = 0;
-            switch (sdk)
-            {
-                case 25: transactionCode = 145; return true;
-                case 26: transactionCode = 151; return true;
-                case 27: transactionCode = 151; return true;
-                case 28: transactionCode = 152; return true;
-                case 29: transactionCode = 151; return true;
-                case 30: transactionCode = 156; return true;
-                case 31: transactionCode = 136; return true;
-                case 32: transactionCode = 136; return true;
-                case 33: transactionCode = 133; return true;
-                case 34: transactionCode = 134; return true;
-                default: return false;
-            }
-        }
-
-        private static bool IsServiceCallBooleanTrue(string output)
-        {
-            if (string.IsNullOrWhiteSpace(output)) return false;
-            return Regex.IsMatch(output, @"\b00000001\b|\b1\b");
         }
 
         private void RefreshSoftwareForegroundFromTimer()
