@@ -32,10 +32,9 @@ namespace AdbTool
         private const string RunLogPrefix = "adb-tool";
         private const string RemoteTempFilePrefix = "adb-tool";
         private const string ApkStageDirName = "ApkStage";
-        private const int DisplayScaleTrackBarMaximum = 100;
-        private const int DisplayScaleTrackBarDefaultValue = 25;
-        private const double DisplayScaleStep = 0.04;
         private const double DefaultDisplayScale = 1.0;
+        private static readonly double[] FontScaleOptions = { 0.0, 1.0, 2.0, 3.0, 4.0 };
+        private static readonly double[] AnimationScaleOptions = { 0.0, 0.5, 1.0, 1.5, 2.0, 5.0, 10.0 };
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern int GetShortPathName(string longPath, StringBuilder shortPath, int bufferLength);
@@ -713,8 +712,8 @@ namespace AdbTool
             var contentPanel = new TableLayoutPanel();
             contentPanel.Dock = DockStyle.Fill;
             contentPanel.ColumnCount = 2;
-            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 49));
-            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 51));
+            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
             contentPanel.RowCount = 1;
             panel.Controls.Add(contentPanel, 0, 1);
 
@@ -724,9 +723,9 @@ namespace AdbTool
             leftPanel.ColumnCount = 1;
             leftPanel.RowCount = 5;
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            leftPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
             leftPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             contentPanel.Controls.Add(leftPanel, 0, 0);
 
@@ -739,16 +738,17 @@ namespace AdbTool
 
             var resolutionPanel = new TableLayoutPanel();
             resolutionPanel.Dock = DockStyle.Fill;
-            resolutionPanel.ColumnCount = 9;
+            resolutionPanel.ColumnCount = 7;
+            resolutionPanel.RowCount = 2;
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
-            resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             resolutionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            resolutionPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            resolutionPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             leftPanel.Controls.Add(resolutionPanel, 0, 1);
             AddLabel(resolutionPanel, "横向像素", 0);
             displayWidthTextBox.Dock = DockStyle.Fill;
@@ -762,8 +762,9 @@ namespace AdbTool
             AddLabel(resolutionPanel, "px", 5);
             applyResolutionButton.Text = "修改";
             restoreResolutionButton.Text = "恢复";
-            AddActionButton(resolutionPanel, applyResolutionButton, 6);
-            AddActionButton(resolutionPanel, restoreResolutionButton, 7);
+            var resolutionActionsPanel = CreateDisplayActionRow(applyResolutionButton, restoreResolutionButton);
+            resolutionPanel.Controls.Add(resolutionActionsPanel, 0, 1);
+            resolutionPanel.SetColumnSpan(resolutionActionsPanel, 3);
 
             displayDensityInfoLabel.Text = "显示密度";
             displayDensityInfoLabel.Dock = DockStyle.Fill;
@@ -774,14 +775,14 @@ namespace AdbTool
 
             var densityPanel = new TableLayoutPanel();
             densityPanel.Dock = DockStyle.Fill;
-            densityPanel.ColumnCount = 7;
+            densityPanel.ColumnCount = 4;
+            densityPanel.RowCount = 2;
             densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
             densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
-            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
-            densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 16));
             densityPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            densityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            densityPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             leftPanel.Controls.Add(densityPanel, 0, 3);
             AddLabel(densityPanel, "密度/宽度", 0);
             displayDensityValueTextBox.Dock = DockStyle.Fill;
@@ -795,8 +796,9 @@ namespace AdbTool
             densityPanel.Controls.Add(displayDensityUnitComboBox, 2, 0);
             applyDensityButton.Text = "修改";
             restoreDensityButton.Text = "恢复";
-            AddActionButton(densityPanel, applyDensityButton, 3);
-            AddActionButton(densityPanel, restoreDensityButton, 4);
+            var densityActionsPanel = CreateDisplayActionRow(applyDensityButton, restoreDensityButton);
+            densityPanel.Controls.Add(densityActionsPanel, 0, 1);
+            densityPanel.SetColumnSpan(densityActionsPanel, 3);
 
             var scalePanel = new TableLayoutPanel();
             scalePanel.Dock = DockStyle.Fill;
@@ -819,12 +821,12 @@ namespace AdbTool
             displayFontScaleInfoLabel.AutoEllipsis = true;
             scalePanel.Controls.Add(displayFontScaleInfoLabel, 0, 0);
 
-            ConfigureDisplayScaleTrackBar(displayFontScaleTrackBar);
+            ConfigureDisplayScaleTrackBar(displayFontScaleTrackBar, FontScaleOptions);
             ConfigureDisplayScaleValueLabel(displayFontScaleValueLabel);
             applyFontScaleButton.Text = "修改";
             restoreFontScaleButton.Text = "恢复";
             scalePanel.Controls.Add(CreateDisplayScaleRow("缩放", displayFontScaleTrackBar, displayFontScaleValueLabel, applyFontScaleButton, restoreFontScaleButton), 0, 1);
-            scalePanel.Controls.Add(CreateDisplayScaleMarkerPanel(), 0, 2);
+            scalePanel.Controls.Add(CreateDisplayScaleMarkerPanel(FontScaleOptions), 0, 2);
 
             displayAnimationScaleInfoLabel.Text = "动画速度";
             displayAnimationScaleInfoLabel.Dock = DockStyle.Fill;
@@ -833,9 +835,9 @@ namespace AdbTool
             displayAnimationScaleInfoLabel.AutoEllipsis = true;
             scalePanel.Controls.Add(displayAnimationScaleInfoLabel, 0, 3);
 
-            ConfigureDisplayScaleTrackBar(windowAnimationScaleTrackBar);
-            ConfigureDisplayScaleTrackBar(transitionAnimationScaleTrackBar);
-            ConfigureDisplayScaleTrackBar(animatorDurationScaleTrackBar);
+            ConfigureDisplayScaleTrackBar(windowAnimationScaleTrackBar, AnimationScaleOptions);
+            ConfigureDisplayScaleTrackBar(transitionAnimationScaleTrackBar, AnimationScaleOptions);
+            ConfigureDisplayScaleTrackBar(animatorDurationScaleTrackBar, AnimationScaleOptions);
             ConfigureDisplayScaleValueLabel(windowAnimationScaleValueLabel);
             ConfigureDisplayScaleValueLabel(transitionAnimationScaleValueLabel);
             ConfigureDisplayScaleValueLabel(animatorDurationScaleValueLabel);
@@ -844,7 +846,7 @@ namespace AdbTool
             scalePanel.Controls.Add(CreateDisplayScaleRow("窗口", windowAnimationScaleTrackBar, windowAnimationScaleValueLabel, applyAnimationScaleButton, restoreAnimationScaleButton), 0, 4);
             scalePanel.Controls.Add(CreateDisplayScaleRow("过渡", transitionAnimationScaleTrackBar, transitionAnimationScaleValueLabel, null, null), 0, 5);
             scalePanel.Controls.Add(CreateDisplayScaleRow("程序", animatorDurationScaleTrackBar, animatorDurationScaleValueLabel, null, null), 0, 6);
-            scalePanel.Controls.Add(CreateDisplayScaleMarkerPanel(), 0, 7);
+            scalePanel.Controls.Add(CreateDisplayScaleMarkerPanel(AnimationScaleOptions), 0, 7);
 
             displayControlStatusLabel.Text = "请勾选一台 device 状态设备后点击“刷新显示信息”；修改显示参数、字体倍数或动画速度可能会短暂刷新设备画面。";
             displayControlStatusLabel.Dock = DockStyle.Fill;
@@ -861,12 +863,12 @@ namespace AdbTool
             displayControlToolTip.SetToolTip(restoreResolutionButton, "执行 wm size reset。");
             displayControlToolTip.SetToolTip(applyDensityButton, "DPI 模式直接设置 density；dp 模式按最小宽度换算 density。");
             displayControlToolTip.SetToolTip(restoreDensityButton, "执行 wm density reset，同时恢复最小宽度表现。");
-            displayControlToolTip.SetToolTip(displayFontScaleTrackBar, "参考搞机工具箱的无级调节，范围 0x - 4x。");
+            displayControlToolTip.SetToolTip(displayFontScaleTrackBar, "字体缩放，可选 0x、1x、2x、3x、4x。");
             displayControlToolTip.SetToolTip(applyFontScaleButton, "执行 settings put system font_scale。");
             displayControlToolTip.SetToolTip(restoreFontScaleButton, "将 font_scale 恢复为 1x。");
-            displayControlToolTip.SetToolTip(windowAnimationScaleTrackBar, "窗口动画速度，范围 0x - 4x。");
-            displayControlToolTip.SetToolTip(transitionAnimationScaleTrackBar, "过渡动画速度，范围 0x - 4x。");
-            displayControlToolTip.SetToolTip(animatorDurationScaleTrackBar, "程序/Animator 动画速度，范围 0x - 4x。");
+            displayControlToolTip.SetToolTip(windowAnimationScaleTrackBar, "窗口动画速度，可选 0x、0.5x、1x、1.5x、2x、5x、10x。");
+            displayControlToolTip.SetToolTip(transitionAnimationScaleTrackBar, "过渡动画速度，可选 0x、0.5x、1x、1.5x、2x、5x、10x。");
+            displayControlToolTip.SetToolTip(animatorDurationScaleTrackBar, "程序/Animator 动画速度，可选 0x、0.5x、1x、1.5x、2x、5x、10x。");
             displayControlToolTip.SetToolTip(applyAnimationScaleButton, "依次设置窗口、过渡和程序动画速度。");
             displayControlToolTip.SetToolTip(restoreAnimationScaleButton, "将三项动画速度恢复为 1x。");
         }
@@ -1266,6 +1268,22 @@ namespace AdbTool
             panel.Controls.Add(button, column, 0);
         }
 
+        private TableLayoutPanel CreateDisplayActionRow(Button applyButton, Button restoreButton)
+        {
+            var actions = new TableLayoutPanel();
+            actions.Dock = DockStyle.Fill;
+            actions.Margin = Padding.Empty;
+            actions.ColumnCount = 3;
+            actions.RowCount = 1;
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            AddActionButton(actions, applyButton, 0);
+            AddActionButton(actions, restoreButton, 1);
+            return actions;
+        }
+
         private TableLayoutPanel CreateDisplayScaleRow(string labelText, TrackBar trackBar, Label valueLabel, Button applyButton, Button restoreButton)
         {
             var row = new TableLayoutPanel();
@@ -1284,7 +1302,7 @@ namespace AdbTool
             return row;
         }
 
-        private TableLayoutPanel CreateDisplayScaleMarkerPanel()
+        private TableLayoutPanel CreateDisplayScaleMarkerPanel(double[] scaleOptions)
         {
             var markerHost = new TableLayoutPanel();
             markerHost.Dock = DockStyle.Fill;
@@ -1299,18 +1317,14 @@ namespace AdbTool
             var markers = new TableLayoutPanel();
             markers.Dock = DockStyle.Fill;
             markers.Margin = Padding.Empty;
-            markers.ColumnCount = 5;
+            markers.ColumnCount = scaleOptions.Length;
             markers.RowCount = 1;
-            for (var i = 0; i < 5; i++)
+            for (var i = 0; i < scaleOptions.Length; i++)
             {
-                markers.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+                markers.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100.0F / scaleOptions.Length));
+                AddDisplayScaleMarkerLabel(markers, FormatDisplayScaleValue(scaleOptions[i]), i);
             }
             markers.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            AddDisplayScaleMarkerLabel(markers, "0x", 0);
-            AddDisplayScaleMarkerLabel(markers, "1x", 1);
-            AddDisplayScaleMarkerLabel(markers, "2x", 2);
-            AddDisplayScaleMarkerLabel(markers, "3x", 3);
-            AddDisplayScaleMarkerLabel(markers, "4x", 4);
             markerHost.Controls.Add(markers, 1, 0);
             return markerHost;
         }
@@ -1326,17 +1340,17 @@ namespace AdbTool
             panel.Controls.Add(label, column, 0);
         }
 
-        private void ConfigureDisplayScaleTrackBar(TrackBar trackBar)
+        private void ConfigureDisplayScaleTrackBar(TrackBar trackBar, double[] scaleOptions)
         {
             trackBar.Dock = DockStyle.Fill;
             trackBar.AutoSize = false;
             trackBar.Height = 30;
             trackBar.Minimum = 0;
-            trackBar.Maximum = DisplayScaleTrackBarMaximum;
-            trackBar.TickFrequency = 25;
+            trackBar.Maximum = scaleOptions.Length - 1;
+            trackBar.TickFrequency = 1;
             trackBar.SmallChange = 1;
-            trackBar.LargeChange = 5;
-            trackBar.Value = DisplayScaleTrackBarDefaultValue;
+            trackBar.LargeChange = 1;
+            trackBar.Value = TrackBarValueFromDisplayScale(DefaultDisplayScale, scaleOptions);
             trackBar.Margin = new Padding(0, 3, 8, 3);
         }
 
@@ -2313,7 +2327,7 @@ namespace AdbTool
         {
             if (!EnsureSingleCheckedDeviceForDisplayControl()) return;
 
-            var scale = GetDisplayScaleFromTrackBar(displayFontScaleTrackBar);
+            var scale = GetDisplayScaleFromTrackBar(displayFontScaleTrackBar, FontScaleOptions);
             var scaleText = FormatDisplayScaleCommandValue(scale);
             RunDisplayControlOperation("正在修改字体大小倍数...", delegate(string adb, DeviceInfo device)
             {
@@ -2335,9 +2349,9 @@ namespace AdbTool
         {
             if (!EnsureSingleCheckedDeviceForDisplayControl()) return;
 
-            var windowScale = GetDisplayScaleFromTrackBar(windowAnimationScaleTrackBar);
-            var transitionScale = GetDisplayScaleFromTrackBar(transitionAnimationScaleTrackBar);
-            var animatorScale = GetDisplayScaleFromTrackBar(animatorDurationScaleTrackBar);
+            var windowScale = GetDisplayScaleFromTrackBar(windowAnimationScaleTrackBar, AnimationScaleOptions);
+            var transitionScale = GetDisplayScaleFromTrackBar(transitionAnimationScaleTrackBar, AnimationScaleOptions);
+            var animatorScale = GetDisplayScaleFromTrackBar(animatorDurationScaleTrackBar, AnimationScaleOptions);
             RunDisplayControlOperation("正在修改动画速度...", delegate(string adb, DeviceInfo device)
             {
                 if (!ApplyDisplayAnimationScale(adb, device.Serial, windowScale, transitionScale, animatorScale, "修改动画速度")) return;
@@ -2592,27 +2606,27 @@ namespace AdbTool
             if (info.HasFontScale)
             {
                 displayFontScaleInfoLabel.Text = "字体大小倍数：当前 " + FormatDisplayScaleValue(info.FontScale) + FormatDisplayScaleUnsetSource(info.IsFontScaleUnset);
-                SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, info.FontScale, preserveFocusedInputs);
+                SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, FontScaleOptions, info.FontScale, preserveFocusedInputs);
             }
             else
             {
                 displayFontScaleInfoLabel.Text = "字体大小倍数：N/A";
-                SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
+                SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, FontScaleOptions, DefaultDisplayScale, preserveFocusedInputs);
             }
 
             if (HasAnyAnimationScale(info))
             {
                 displayAnimationScaleInfoLabel.Text = "动画速度：" + FormatDisplayAnimationSummary(info);
-                if (info.HasWindowAnimationScale) SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, info.WindowAnimationScale, preserveFocusedInputs);
-                if (info.HasTransitionAnimationScale) SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, info.TransitionAnimationScale, preserveFocusedInputs);
-                if (info.HasAnimatorDurationScale) SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, info.AnimatorDurationScale, preserveFocusedInputs);
+                if (info.HasWindowAnimationScale) SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, AnimationScaleOptions, info.WindowAnimationScale, preserveFocusedInputs);
+                if (info.HasTransitionAnimationScale) SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, AnimationScaleOptions, info.TransitionAnimationScale, preserveFocusedInputs);
+                if (info.HasAnimatorDurationScale) SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, AnimationScaleOptions, info.AnimatorDurationScale, preserveFocusedInputs);
             }
             else
             {
                 displayAnimationScaleInfoLabel.Text = "动画速度：N/A";
-                SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
-                SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
-                SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, DefaultDisplayScale, preserveFocusedInputs);
+                SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, AnimationScaleOptions, DefaultDisplayScale, preserveFocusedInputs);
+                SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, AnimationScaleOptions, DefaultDisplayScale, preserveFocusedInputs);
+                SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, AnimationScaleOptions, DefaultDisplayScale, preserveFocusedInputs);
             }
             UpdateDisplayScaleValueLabels();
         }
@@ -2627,10 +2641,10 @@ namespace AdbTool
             displayWidthTextBox.Clear();
             displayHeightTextBox.Clear();
             displayDensityValueTextBox.Clear();
-            SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, DefaultDisplayScale, false);
-            SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, DefaultDisplayScale, false);
-            SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, DefaultDisplayScale, false);
-            SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, DefaultDisplayScale, false);
+            SetDisplayScaleTrackBarValue(displayFontScaleTrackBar, FontScaleOptions, DefaultDisplayScale, false);
+            SetDisplayScaleTrackBarValue(windowAnimationScaleTrackBar, AnimationScaleOptions, DefaultDisplayScale, false);
+            SetDisplayScaleTrackBarValue(transitionAnimationScaleTrackBar, AnimationScaleOptions, DefaultDisplayScale, false);
+            SetDisplayScaleTrackBarValue(animatorDurationScaleTrackBar, AnimationScaleOptions, DefaultDisplayScale, false);
             UpdateDisplayScaleValueLabels();
         }
 
@@ -2664,16 +2678,16 @@ namespace AdbTool
 
         private void UpdateDisplayScaleValueLabels()
         {
-            displayFontScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(displayFontScaleTrackBar));
-            windowAnimationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(windowAnimationScaleTrackBar));
-            transitionAnimationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(transitionAnimationScaleTrackBar));
-            animatorDurationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(animatorDurationScaleTrackBar));
+            displayFontScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(displayFontScaleTrackBar, FontScaleOptions));
+            windowAnimationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(windowAnimationScaleTrackBar, AnimationScaleOptions));
+            transitionAnimationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(transitionAnimationScaleTrackBar, AnimationScaleOptions));
+            animatorDurationScaleValueLabel.Text = FormatDisplayScaleValue(GetDisplayScaleFromTrackBar(animatorDurationScaleTrackBar, AnimationScaleOptions));
         }
 
-        private void SetDisplayScaleTrackBarValue(TrackBar trackBar, double scale, bool preserveFocusedInput)
+        private void SetDisplayScaleTrackBarValue(TrackBar trackBar, double[] scaleOptions, double scale, bool preserveFocusedInput)
         {
             if (preserveFocusedInput && trackBar.Focused) return;
-            trackBar.Value = TrackBarValueFromDisplayScale(scale);
+            trackBar.Value = TrackBarValueFromDisplayScale(scale, scaleOptions);
         }
 
         private static bool HasAnyAnimationScale(DisplayControlInfo info)
@@ -2694,16 +2708,27 @@ namespace AdbTool
             return isUnset ? "（未设置，按 1x）" : "";
         }
 
-        private static double GetDisplayScaleFromTrackBar(TrackBar trackBar)
+        private static double GetDisplayScaleFromTrackBar(TrackBar trackBar, double[] scaleOptions)
         {
-            return Math.Round(trackBar.Value * DisplayScaleStep, 2);
+            var optionIndex = ClampInt(trackBar.Value, 0, scaleOptions.Length - 1);
+            return scaleOptions[optionIndex];
         }
 
-        private static int TrackBarValueFromDisplayScale(double scale)
+        private static int TrackBarValueFromDisplayScale(double scale, double[] scaleOptions)
         {
             if (double.IsNaN(scale) || double.IsInfinity(scale)) scale = DefaultDisplayScale;
-            var value = (int)Math.Round(scale / DisplayScaleStep);
-            return ClampInt(value, 0, DisplayScaleTrackBarMaximum);
+            var nearestIndex = 0;
+            var nearestDistance = double.MaxValue;
+            for (var i = 0; i < scaleOptions.Length; i++)
+            {
+                var distance = Math.Abs(scaleOptions[i] - scale);
+                if (distance <= nearestDistance)
+                {
+                    nearestIndex = i;
+                    nearestDistance = distance;
+                }
+            }
+            return nearestIndex;
         }
 
         private static string FormatDisplayScaleValue(double scale)
