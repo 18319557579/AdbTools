@@ -32,6 +32,7 @@ namespace AdbTool
         private const string RunLogPrefix = "adb-tool";
         private const string RemoteTempFilePrefix = "adb-tool";
         private const string ApkStageDirName = "ApkStage";
+        private const int MaxRecentApkFolders = 10;
         private const double DefaultDisplayScale = 1.0;
         private static readonly double[] FontScaleOptions = { 0.0, 1.0, 2.0, 3.0, 4.0 };
         private static readonly double[] AnimationScaleOptions = { 0.0, 0.5, 1.0, 1.5, 2.0, 5.0, 10.0 };
@@ -163,6 +164,7 @@ namespace AdbTool
         private readonly Button cancelButton = new Button();
         private readonly Button clearLogButton = new Button();
         private readonly Label apkInfoLabel = new Label();
+        private readonly ListView recentApkFoldersListView = new ListView();
         private readonly Label statusLabel = new Label();
         private readonly TextBox logBox = new TextBox();
 
@@ -262,6 +264,7 @@ namespace AdbTool
         private readonly ToolTip toolPathToolTip = new ToolTip();
 
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
+        private readonly List<string> recentApkFolders = new List<string>();
         private readonly object processLock = new object();
         private readonly string appDir;
         private readonly string legacyConfigPath;
@@ -299,6 +302,7 @@ namespace AdbTool
         private bool loadingConfig;
         private bool configReady;
         private bool applyingLayoutConfig;
+        private bool refreshingRecentApkFolders;
         private bool updatingTransferFields;
         private int savedTabAreaHeight = DefaultTabAreaHeight;
         private int savedDeviceAreaHeight = DefaultDeviceAreaHeight;
@@ -352,6 +356,7 @@ namespace AdbTool
             InitTransferDefaults();
             InitScreenshotDefaults();
             LoadConfig();
+            RefreshRecentApkFoldersList();
             configReady = true;
             UpdateToolPathStatus();
             UpdateExecutionOptionState();
@@ -420,12 +425,13 @@ namespace AdbTool
             installTab.Padding = new Padding(10);
             var panel = new TableLayoutPanel();
             panel.Dock = DockStyle.Fill;
-            panel.ColumnCount = 1;
-            panel.RowCount = 4;
+            panel.ColumnCount = 2;
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+            panel.RowCount = 3;
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
             panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             installTab.Controls.Add(panel);
 
             var apkPanel = new TableLayoutPanel();
@@ -435,6 +441,7 @@ namespace AdbTool
             apkPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             apkPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             panel.Controls.Add(apkPanel, 0, 0);
+            panel.SetColumnSpan(apkPanel, 2);
             var apkLabel = new Label();
             apkLabel.Text = "APK 文件";
             apkLabel.Dock = DockStyle.Fill;
@@ -450,12 +457,22 @@ namespace AdbTool
             apkInfoLabel.TextAlign = ContentAlignment.MiddleLeft;
             apkInfoLabel.ForeColor = Color.FromArgb(60, 60, 60);
             panel.Controls.Add(apkInfoLabel, 0, 1);
+            panel.SetColumnSpan(apkInfoLabel, 2);
+
+            var installActionArea = new TableLayoutPanel();
+            installActionArea.Dock = DockStyle.Fill;
+            installActionArea.ColumnCount = 1;
+            installActionArea.RowCount = 3;
+            installActionArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+            installActionArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            installActionArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            panel.Controls.Add(installActionArea, 0, 2);
 
             var optionsPanel = new FlowLayoutPanel();
             optionsPanel.Dock = DockStyle.Fill;
             optionsPanel.FlowDirection = FlowDirection.LeftToRight;
             optionsPanel.WrapContents = false;
-            panel.Controls.Add(optionsPanel, 0, 2);
+            installActionArea.Controls.Add(optionsPanel, 0, 0);
             AddModeOption(optionsPanel, installModeRadioButton, "安装/覆盖", true);
             AddModeOption(optionsPanel, cleanInstallModeRadioButton, "卸载后安装", false);
             AddModeOption(optionsPanel, uninstallModeRadioButton, "仅卸载", false);
@@ -472,7 +489,7 @@ namespace AdbTool
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             actionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.Controls.Add(actionPanel, 0, 3);
+            installActionArea.Controls.Add(actionPanel, 0, 1);
             installButton.Text = "开始执行";
             installButton.Dock = DockStyle.None;
             installButton.Size = new Size(88, 28);
@@ -484,6 +501,25 @@ namespace AdbTool
             cancelButton.Margin = new Padding(0, 4, 8, 0);
             cancelButton.Enabled = false;
             actionPanel.Controls.Add(cancelButton, 1, 0);
+
+            var historyGroup = new GroupBox();
+            historyGroup.Text = "最近 APK 文件夹";
+            historyGroup.Dock = DockStyle.Fill;
+            historyGroup.Margin = new Padding(10, 4, 0, 0);
+            historyGroup.Padding = new Padding(8);
+            panel.Controls.Add(historyGroup, 1, 2);
+
+            recentApkFoldersListView.Dock = DockStyle.Fill;
+            recentApkFoldersListView.View = View.Details;
+            recentApkFoldersListView.FullRowSelect = true;
+            recentApkFoldersListView.HideSelection = false;
+            recentApkFoldersListView.MultiSelect = false;
+            recentApkFoldersListView.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            recentApkFoldersListView.ShowItemToolTips = true;
+            recentApkFoldersListView.Columns.Add("APK 文件夹");
+            historyGroup.Controls.Add(recentApkFoldersListView);
+            recentApkFoldersListView.Resize += delegate { ResizeRecentApkFolderColumn(); };
+            ResizeRecentApkFolderColumn();
         }
 
         private void BuildSoftwareManagementTab()
@@ -1604,6 +1640,7 @@ namespace AdbTool
         private void WireEvents()
         {
             browseButton.Click += delegate { BrowseApk(); };
+            recentApkFoldersListView.SelectedIndexChanged += delegate { SelectApkFromRecentFolder(); };
             refreshButton.Click += delegate { RefreshDevices(true); };
             settingsButton.Click += delegate { ShowToolSettingsDialog(); };
             connectButton.Click += delegate { ShowDeviceConnectionDialog(); };
@@ -3411,6 +3448,7 @@ namespace AdbTool
             clearDataModeRadioButton.Enabled = !busy;
             startAppModeRadioButton.Enabled = !busy;
             apkTextBox.Enabled = !busy;
+            recentApkFoldersListView.Enabled = !busy;
             launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
             clearLogcatCacheButton.Enabled = !busy;
             exportLogcatCacheButton.Enabled = !busy;
@@ -3965,6 +4003,7 @@ namespace AdbTool
             clearDataModeRadioButton.Enabled = !busy;
             startAppModeRadioButton.Enabled = !busy;
             apkTextBox.Enabled = !busy;
+            recentApkFoldersListView.Enabled = !busy;
             deviceList.Enabled = !busy;
             launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
             clearLogcatCacheButton.Enabled = !busy;
@@ -4369,6 +4408,45 @@ namespace AdbTool
             }
         }
 
+        private void ResizeRecentApkFolderColumn()
+        {
+            if (recentApkFoldersListView.Columns.Count == 0) return;
+            recentApkFoldersListView.Columns[0].Width = Math.Max(120, recentApkFoldersListView.ClientSize.Width - 4);
+        }
+
+        private void SelectApkFromRecentFolder()
+        {
+            if (refreshingRecentApkFolders || recentApkFoldersListView.SelectedItems.Count == 0) return;
+            var folder = recentApkFoldersListView.SelectedItems[0].Tag as string;
+            if (string.IsNullOrWhiteSpace(folder)) return;
+
+            if (!Directory.Exists(folder))
+            {
+                MessageBox.Show(this, "此文件夹不存在。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                var latestApk = new DirectoryInfo(folder)
+                    .GetFiles()
+                    .Where(file => string.Equals(file.Extension, ".apk", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(file => file.LastWriteTimeUtc)
+                    .ThenByDescending(file => file.Name, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (latestApk == null)
+                {
+                    MessageBox.Show(this, "此文件夹没有APK", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                SetApkPath(latestApk.FullName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "无法读取此文件夹。\r\n\r\n" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
         private void ShowDeviceConnectionDialog()
         {
             if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
@@ -4527,6 +4605,7 @@ namespace AdbTool
             clearDataModeRadioButton.Enabled = !busy;
             startAppModeRadioButton.Enabled = !busy;
             apkTextBox.Enabled = !busy;
+            recentApkFoldersListView.Enabled = !busy;
             launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
             clearLogcatCacheButton.Enabled = !busy;
             exportLogcatCacheButton.Enabled = !busy;
@@ -5217,7 +5296,80 @@ namespace AdbTool
             return files.FirstOrDefault(f => File.Exists(f) && string.Equals(Path.GetExtension(f), ".apk", StringComparison.OrdinalIgnoreCase));
         }
 
-        private void SetApkPath(string path) { apkTextBox.Text = path; SaveConfig(path); }
+        private void SetApkPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            try { path = Path.GetFullPath(path.Trim().Trim('"')); } catch { }
+            if (File.Exists(path) && string.Equals(Path.GetExtension(path), ".apk", StringComparison.OrdinalIgnoreCase))
+            {
+                AddRecentApkFolder(Path.GetDirectoryName(path));
+            }
+            apkTextBox.Text = path;
+            SaveConfig(path);
+        }
+
+        private void AddRecentApkFolder(string folder, bool refreshList = true)
+        {
+            folder = NormalizeFolderPath(folder);
+            if (string.IsNullOrEmpty(folder)) return;
+            recentApkFolders.RemoveAll(item => string.Equals(item, folder, StringComparison.OrdinalIgnoreCase));
+            recentApkFolders.Insert(0, folder);
+            if (recentApkFolders.Count > MaxRecentApkFolders)
+            {
+                recentApkFolders.RemoveRange(MaxRecentApkFolders, recentApkFolders.Count - MaxRecentApkFolders);
+            }
+            if (refreshList) RefreshRecentApkFoldersList();
+        }
+
+        private static string NormalizeFolderPath(string folder)
+        {
+            if (string.IsNullOrWhiteSpace(folder)) return null;
+            try
+            {
+                var fullPath = Path.GetFullPath(folder.Trim().Trim('"'));
+                var root = Path.GetPathRoot(fullPath);
+                return string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase)
+                    ? fullPath
+                    : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch { return null; }
+        }
+
+        private void LoadRecentApkFolders(string json)
+        {
+            recentApkFolders.Clear();
+            foreach (var folder in ReadJsonStringArray(json, "recentApkFolders"))
+            {
+                var normalized = NormalizeFolderPath(folder);
+                if (string.IsNullOrEmpty(normalized)) continue;
+                if (recentApkFolders.Any(item => string.Equals(item, normalized, StringComparison.OrdinalIgnoreCase))) continue;
+                recentApkFolders.Add(normalized);
+                if (recentApkFolders.Count == MaxRecentApkFolders) break;
+            }
+        }
+
+        private void RefreshRecentApkFoldersList()
+        {
+            refreshingRecentApkFolders = true;
+            recentApkFoldersListView.BeginUpdate();
+            try
+            {
+                recentApkFoldersListView.Items.Clear();
+                foreach (var folder in recentApkFolders)
+                {
+                    var item = new ListViewItem(folder);
+                    item.Tag = folder;
+                    item.ToolTipText = folder;
+                    recentApkFoldersListView.Items.Add(item);
+                }
+                ResizeRecentApkFolderColumn();
+            }
+            finally
+            {
+                recentApkFoldersListView.EndUpdate();
+                refreshingRecentApkFolders = false;
+            }
+        }
 
         private void LoadConfig()
         {
@@ -5230,6 +5382,7 @@ namespace AdbTool
 
                 configuredAdbPath = NormalizeToolPathSetting(ReadJsonString(json, "adbPath"));
                 configuredAaptPath = NormalizeToolPathSetting(ReadJsonString(json, "aaptPath"));
+                LoadRecentApkFolders(json);
 
                 var windowWidth = ReadJsonInt(json, "windowWidth");
                 var windowHeight = ReadJsonInt(json, "windowHeight");
@@ -5246,6 +5399,12 @@ namespace AdbTool
 
                 var lastApkPath = ReadJsonString(json, "lastApkPath");
                 if (!string.IsNullOrEmpty(lastApkPath) && File.Exists(lastApkPath)) apkTextBox.Text = lastApkPath;
+                if (!string.IsNullOrEmpty(lastApkPath))
+                {
+                    string lastApkFolder = null;
+                    try { lastApkFolder = Path.GetDirectoryName(Path.GetFullPath(lastApkPath)); } catch { }
+                    if (!string.IsNullOrEmpty(lastApkFolder) && Directory.Exists(lastApkFolder)) AddRecentApkFolder(lastApkFolder, false);
+                }
 
                 var softwarePackageName = ReadJsonString(json, "softwarePackageName");
                 if (softwarePackageName != null) softwarePackageTextBox.Text = softwarePackageName;
@@ -5307,6 +5466,7 @@ namespace AdbTool
 
         private void SaveLastApkPath(string path)
         {
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) AddRecentApkFolder(Path.GetDirectoryName(path));
             SaveConfig(path);
         }
 
@@ -5325,6 +5485,7 @@ namespace AdbTool
                     "    \"adbPath\":  \"" + EscapeJsonString(configuredAdbPath) + "\",\r\n" +
                     "    \"aaptPath\":  \"" + EscapeJsonString(configuredAaptPath) + "\",\r\n" +
                     "    \"lastApkPath\":  \"" + EscapeJsonString(lastApkPath) + "\",\r\n" +
+                    "    \"recentApkFolders\":  " + FormatJsonStringArray(recentApkFolders) + ",\r\n" +
                     "    \"softwarePackageName\":  \"" + EscapeJsonString(softwarePackageTextBox.Text) + "\",\r\n" +
                     "    \"softwareAutoFill\":  " + (softwareAutoFillCheckBox.Checked ? "true" : "false") + ",\r\n" +
                     "    \"windowWidth\":  " + windowSize.Width.ToString() + ",\r\n" +
@@ -5360,6 +5521,36 @@ namespace AdbTool
             var pattern = "\"" + Regex.Escape(name) + "\"\\s*:\\s*\"(?<value>(?:\\\\.|[^\"])*)\"";
             var match = Regex.Match(json, pattern);
             return match.Success ? Regex.Unescape(match.Groups["value"].Value) : null;
+        }
+
+        private static List<string> ReadJsonStringArray(string json, string name)
+        {
+            var values = new List<string>();
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name)) return values;
+            var propertyMatch = Regex.Match(json, "\"" + Regex.Escape(name) + "\"\\s*:");
+            if (!propertyMatch.Success) return values;
+            var arrayStart = json.IndexOf('[', propertyMatch.Index + propertyMatch.Length);
+            if (arrayStart < 0) return values;
+
+            var inString = false;
+            var escaped = false;
+            var arrayEnd = -1;
+            for (var i = arrayStart + 1; i < json.Length; i++)
+            {
+                var current = json[i];
+                if (escaped) { escaped = false; continue; }
+                if (inString && current == '\\') { escaped = true; continue; }
+                if (current == '"') { inString = !inString; continue; }
+                if (!inString && current == ']') { arrayEnd = i; break; }
+            }
+            if (arrayEnd < 0) return values;
+
+            var arrayContent = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
+            foreach (Match itemMatch in Regex.Matches(arrayContent, "\"(?<value>(?:\\\\.|[^\"])*)\""))
+            {
+                values.Add(Regex.Unescape(itemMatch.Groups["value"].Value));
+            }
+            return values;
         }
 
         private static bool? ReadJsonBool(string json, string name)
@@ -5404,6 +5595,12 @@ namespace AdbTool
                 .Replace("\r", "\\r")
                 .Replace("\n", "\\n")
                 .Replace("\t", "\\t");
+        }
+
+        private static string FormatJsonStringArray(IEnumerable<string> values)
+        {
+            if (values == null) return "[]";
+            return "[" + string.Join(", ", values.Select(value => "\"" + EscapeJsonString(value) + "\"").ToArray()) + "]";
         }
 
         private TransferDirection CurrentTransferDirection
@@ -6622,6 +6819,7 @@ namespace AdbTool
             clearDataModeRadioButton.Enabled = !busy;
             startAppModeRadioButton.Enabled = !busy;
             apkTextBox.Enabled = !busy;
+            recentApkFoldersListView.Enabled = !busy;
             deviceList.Enabled = !busy;
             launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
             clearLogcatCacheButton.Enabled = !busy;
@@ -6672,6 +6870,7 @@ namespace AdbTool
             clearDataModeRadioButton.Enabled = !busy;
             startAppModeRadioButton.Enabled = !busy;
             apkTextBox.Enabled = !busy;
+            recentApkFoldersListView.Enabled = !busy;
             deviceList.Enabled = !busy;
             launchAfterInstallCheckBox.Enabled = !busy && !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
             clearLogcatCacheButton.Enabled = !busy;
