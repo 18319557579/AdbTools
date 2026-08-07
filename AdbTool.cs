@@ -1248,6 +1248,7 @@ namespace AdbTool
             screenshotToolTip.SetToolTip(stopScreenRecordButton, "停止录屏并拉取 MP4 到保存目录。");
             screenshotToolTip.SetToolTip(saveScreenshotAsButton, "另存最近一次截屏或录屏。");
             screenshotToolTip.SetToolTip(openScreenshotDirButton, "打开保存目录；已有结果时会选中最近文件。");
+            screenshotToolTip.SetToolTip(screenshotPreviewBox, "截屏或录屏完成后，点击预览可用系统默认应用打开文件。");
             screenshotToolTip.SetToolTip(screenRecordTimeLimitCheckBox, "勾选后会向 screenrecord 传入 --time-limit。");
             screenshotToolTip.SetToolTip(screenRecordBitRateNumeric, "码率越高画质通常越好，文件也越大。");
         }
@@ -1661,6 +1662,7 @@ namespace AdbTool
             stopScreenRecordButton.Click += delegate { StopScreenRecording(); };
             saveScreenshotAsButton.Click += delegate { SaveLatestCaptureAs(); };
             openScreenshotDirButton.Click += delegate { OpenScreenshotDirectory(); };
+            screenshotPreviewBox.Click += delegate { OpenLatestCapture(); };
             logRecordStatusTimer.Interval = 1000;
             logRecordStatusTimer.Tick += delegate { UpdateLogRecordStatus(); };
             screenRecordStatusTimer.Interval = 1000;
@@ -3324,8 +3326,10 @@ namespace AdbTool
 
         private void UpdateCaptureActionButtons(bool busy)
         {
-            saveScreenshotAsButton.Enabled = !busy && HasLatestCaptureFile();
+            var canOpenCapture = !busy && HasLatestCaptureFile();
+            saveScreenshotAsButton.Enabled = canOpenCapture;
             openScreenshotDirButton.Enabled = !busy;
+            screenshotPreviewBox.Cursor = canOpenCapture ? Cursors.Hand : Cursors.Default;
         }
 
         private void UpdateScreenRecordOptionState()
@@ -4245,6 +4249,23 @@ namespace AdbTool
                 {
                     MessageBox.Show(this, "另存失败：" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+        }
+
+        private void OpenLatestCapture()
+        {
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning || !HasLatestCaptureFile()) return;
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = lastCapturePath,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "无法使用系统默认应用打开文件：" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
