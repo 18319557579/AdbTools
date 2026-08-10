@@ -138,6 +138,29 @@ namespace AdbTool
             public string ActivityName = "";
         }
 
+        private sealed class SettingsNavigationTarget
+        {
+            public string Name;
+            public string Action;
+            public string Description;
+            public string FallbackName;
+            public string FallbackAction;
+
+            public SettingsNavigationTarget(string name, string action, string description)
+                : this(name, action, description, "", "")
+            {
+            }
+
+            public SettingsNavigationTarget(string name, string action, string description, string fallbackName, string fallbackAction)
+            {
+                Name = name;
+                Action = action;
+                Description = description;
+                FallbackName = fallbackName;
+                FallbackAction = fallbackAction;
+            }
+        }
+
         private readonly TabControl tabControl = new TabControl();
         private readonly SplitContainer mainSplitContainer = new SplitContainer();
         private readonly SplitContainer lowerSplitContainer = new SplitContainer();
@@ -147,6 +170,7 @@ namespace AdbTool
         private readonly TabPage logRecordTab = new TabPage("日志录制");
         private readonly TabPage softwareManagementTab = new TabPage("软件管理");
         private readonly TabPage displayControlTab = new TabPage("显示控制");
+        private readonly TabPage settingsNavigationTab = new TabPage("跳转");
         private readonly TabPage deviceInfoTab = new TabPage("设备概览");
         private readonly TextBox apkTextBox = new TextBox();
         private readonly Button browseButton = new Button();
@@ -261,6 +285,9 @@ namespace AdbTool
         private readonly Button restoreAnimationScaleButton = new Button();
         private readonly Button restoreDisplayAllButton = new Button();
         private readonly ToolTip displayControlToolTip = new ToolTip();
+        private readonly Label settingsNavigationStatusLabel = new Label();
+        private readonly List<Button> settingsNavigationButtons = new List<Button>();
+        private readonly ToolTip settingsNavigationToolTip = new ToolTip();
         private readonly ToolTip toolPathToolTip = new ToolTip();
 
         private readonly Dictionary<string, DeviceInfo> deviceMap = new Dictionary<string, DeviceInfo>();
@@ -399,6 +426,7 @@ namespace AdbTool
             tabControl.TabPages.Add(logRecordTab);
             tabControl.TabPages.Add(softwareManagementTab);
             tabControl.TabPages.Add(displayControlTab);
+            tabControl.TabPages.Add(settingsNavigationTab);
             tabControl.TabPages.Add(deviceInfoTab);
             mainSplitContainer.Panel1.Controls.Add(tabControl);
 
@@ -415,9 +443,147 @@ namespace AdbTool
             BuildLogRecordTab();
             BuildSoftwareManagementTab();
             BuildDisplayControlTab();
+            BuildSettingsNavigationTab();
             BuildDeviceInfoTab();
             BuildSharedDeviceArea(lowerSplitContainer.Panel1);
             BuildSharedLogArea(lowerSplitContainer.Panel2);
+        }
+
+        private void BuildSettingsNavigationTab()
+        {
+            settingsNavigationTab.Padding = new Padding(10);
+            settingsNavigationTab.AutoScroll = true;
+
+            var panel = new TableLayoutPanel();
+            panel.Dock = DockStyle.Top;
+            panel.ColumnCount = 1;
+            panel.RowCount = 1;
+            panel.Height = 38;
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            settingsNavigationTab.Controls.Add(panel);
+
+            settingsNavigationStatusLabel.Text = "就绪：请在下方目标设备列表中勾选一台 device 状态设备。";
+            settingsNavigationStatusLabel.Dock = DockStyle.Fill;
+            settingsNavigationStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            settingsNavigationStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
+            settingsNavigationStatusLabel.AutoEllipsis = true;
+            panel.Controls.Add(settingsNavigationStatusLabel, 0, 0);
+
+            AddSettingsNavigationSection(panel, "常用设置", new[]
+            {
+                new SettingsNavigationTarget("设置首页", "android.settings.SETTINGS", "打开系统设置首页。"),
+                new SettingsNavigationTarget("Wi-Fi", "android.settings.WIFI_SETTINGS", "打开 Wi-Fi 设置。"),
+                new SettingsNavigationTarget("蓝牙", "android.settings.BLUETOOTH_SETTINGS", "打开蓝牙设置。"),
+                new SettingsNavigationTarget("移动网络", "android.settings.NETWORK_OPERATOR_SETTINGS", "打开移动网络或运营商设置。"),
+                new SettingsNavigationTarget("流量使用", "android.settings.DATA_USAGE_SETTINGS", "打开移动数据使用情况。"),
+                new SettingsNavigationTarget("飞行模式", "android.settings.AIRPLANE_MODE_SETTINGS", "打开飞行模式设置。"),
+                new SettingsNavigationTarget("VPN", "android.settings.VPN_SETTINGS", "打开 VPN 设置。")
+            });
+
+            AddSettingsNavigationSection(panel, "网络与连接", new[]
+            {
+                new SettingsNavigationTarget("无线与网络", "android.settings.WIRELESS_SETTINGS", "打开无线与网络综合设置。"),
+                new SettingsNavigationTarget("网络共享", "android.settings.TETHER_SETTINGS", "打开热点与网络共享设置。"),
+                new SettingsNavigationTarget("数据漫游", "android.settings.DATA_ROAMING_SETTINGS", "打开数据漫游设置。"),
+                new SettingsNavigationTarget("NFC", "android.settings.NFC_SETTINGS", "打开 NFC 设置。"),
+                new SettingsNavigationTarget("无线投屏", "android.settings.CAST_SETTINGS", "打开投屏或无线显示设置。", "无线与网络", "android.settings.WIRELESS_SETTINGS"),
+                new SettingsNavigationTarget("打印", "android.settings.ACTION_PRINT_SETTINGS", "打开系统打印服务设置。"),
+                new SettingsNavigationTarget("Wi-Fi IP", "android.settings.WIFI_IP_SETTINGS", "打开 Wi-Fi IP 高级设置。"),
+                new SettingsNavigationTarget("接入点 APN", "android.settings.APN_SETTINGS", "打开移动网络接入点设置。")
+            });
+
+            AddSettingsNavigationSection(panel, "显示与声音", new[]
+            {
+                new SettingsNavigationTarget("显示", "android.settings.DISPLAY_SETTINGS", "打开显示设置。"),
+                new SettingsNavigationTarget("声音", "android.settings.SOUND_SETTINGS", "打开声音设置。"),
+                new SettingsNavigationTarget("通知", "android.settings.NOTIFICATION_SETTINGS", "打开通知设置。"),
+                new SettingsNavigationTarget("勿扰模式", "android.settings.ZEN_MODE_SETTINGS", "打开勿扰模式设置。"),
+                new SettingsNavigationTarget("夜间模式", "android.settings.NIGHT_DISPLAY_SETTINGS", "打开夜间模式或护眼设置。", "显示", "android.settings.DISPLAY_SETTINGS"),
+                new SettingsNavigationTarget("字幕", "android.settings.CAPTIONING_SETTINGS", "打开字幕辅助设置。"),
+                new SettingsNavigationTarget("屏保", "android.settings.DREAM_SETTINGS", "打开屏幕保护设置。")
+            });
+
+            AddSettingsNavigationSection(panel, "系统与隐私", new[]
+            {
+                new SettingsNavigationTarget("省电模式", "android.settings.BATTERY_SAVER_SETTINGS", "打开省电模式设置。"),
+                new SettingsNavigationTarget("存储", "android.settings.INTERNAL_STORAGE_SETTINGS", "打开内部存储设置。"),
+                new SettingsNavigationTarget("位置", "android.settings.LOCATION_SOURCE_SETTINGS", "打开位置服务设置。"),
+                new SettingsNavigationTarget("安全", "android.settings.SECURITY_SETTINGS", "打开安全设置。"),
+                new SettingsNavigationTarget("隐私", "android.settings.PRIVACY_SETTINGS", "打开隐私设置。"),
+                new SettingsNavigationTarget("辅助功能", "android.settings.ACCESSIBILITY_SETTINGS", "打开无障碍与辅助功能设置。"),
+                new SettingsNavigationTarget("语言与地区", "android.settings.LOCALE_SETTINGS", "打开系统语言与地区设置。"),
+                new SettingsNavigationTarget("日期与时间", "android.settings.DATE_SETTINGS", "打开日期和时间设置。"),
+                new SettingsNavigationTarget("键盘与输入法", "android.settings.INPUT_METHOD_SETTINGS", "打开键盘与输入法设置。")
+            });
+
+            AddSettingsNavigationSection(panel, "应用与账号", new[]
+            {
+                new SettingsNavigationTarget("应用设置", "android.settings.APPLICATION_SETTINGS", "打开应用设置。"),
+                new SettingsNavigationTarget("应用列表", "android.settings.MANAGE_APPLICATIONS_SETTINGS", "打开已安装应用列表。"),
+                new SettingsNavigationTarget("默认应用", "android.settings.MANAGE_DEFAULT_APPS_SETTINGS", "打开默认应用设置。"),
+                new SettingsNavigationTarget("通知使用权", "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS", "打开通知使用权设置。"),
+                new SettingsNavigationTarget("使用情况访问", "android.settings.USAGE_ACCESS_SETTINGS", "打开使用情况访问权限设置。"),
+                new SettingsNavigationTarget("账号与同步", "android.settings.SYNC_SETTINGS", "打开账号与同步设置。"),
+                new SettingsNavigationTarget("添加账号", "android.settings.ADD_ACCOUNT_SETTINGS", "打开添加账号设置。"),
+                new SettingsNavigationTarget("主屏幕应用", "android.settings.HOME_SETTINGS", "打开默认桌面应用设置。")
+            });
+
+            AddSettingsNavigationSection(panel, "系统高级", new[]
+            {
+                new SettingsNavigationTarget("开发者选项", "android.settings.APPLICATION_DEVELOPMENT_SETTINGS", "打开开发者选项。"),
+                new SettingsNavigationTarget("关于手机", "android.settings.DEVICE_INFO_SETTINGS", "打开关于手机页面。"),
+                new SettingsNavigationTarget("系统更新", "android.settings.SYSTEM_UPDATE_SETTINGS", "打开系统更新页面。", "关于手机", "android.settings.DEVICE_INFO_SETTINGS"),
+                new SettingsNavigationTarget("备份", "android.settings.BACKUP_SETTINGS", "打开备份设置。", "隐私", "android.settings.PRIVACY_SETTINGS"),
+                new SettingsNavigationTarget("电池优化", "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS", "打开忽略电池优化的应用列表。"),
+                new SettingsNavigationTarget("安装未知应用", "android.settings.MANAGE_UNKNOWN_APP_SOURCES", "打开安装未知应用权限设置。")
+            });
+        }
+
+        private void AddSettingsNavigationSection(TableLayoutPanel parent, string title, SettingsNavigationTarget[] targets)
+        {
+            const int columnCount = 5;
+            const int titleHeight = 28;
+            const int buttonRowHeight = 40;
+            var buttonRowCount = (targets.Length + columnCount - 1) / columnCount;
+            var sectionHeight = titleHeight + buttonRowCount * buttonRowHeight;
+            var parentRow = parent.RowCount;
+
+            parent.RowCount++;
+            parent.RowStyles.Add(new RowStyle(SizeType.Absolute, sectionHeight));
+            parent.Height += sectionHeight;
+
+            var section = new TableLayoutPanel();
+            section.Dock = DockStyle.Fill;
+            section.Margin = new Padding(0, 0, 0, 4);
+            section.ColumnCount = columnCount;
+            section.RowCount = buttonRowCount + 1;
+            for (var column = 0; column < columnCount; column++) section.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            section.RowStyles.Add(new RowStyle(SizeType.Absolute, titleHeight));
+            for (var row = 0; row < buttonRowCount; row++) section.RowStyles.Add(new RowStyle(SizeType.Absolute, buttonRowHeight));
+            parent.Controls.Add(section, 0, parentRow);
+
+            var titleLabel = new Label();
+            titleLabel.Text = title;
+            titleLabel.Dock = DockStyle.Fill;
+            titleLabel.TextAlign = ContentAlignment.MiddleLeft;
+            titleLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            section.Controls.Add(titleLabel, 0, 0);
+            section.SetColumnSpan(titleLabel, columnCount);
+
+            for (var index = 0; index < targets.Length; index++)
+            {
+                var target = targets[index];
+                var button = new Button();
+                button.Text = target.Name;
+                button.Dock = DockStyle.Fill;
+                button.Margin = new Padding(0, 3, 8, 3);
+                button.Click += delegate { StartSettingsNavigation(target); };
+                settingsNavigationButtons.Add(button);
+                var fallbackHint = string.IsNullOrWhiteSpace(target.FallbackAction) ? "" : "\r\n不支持时回退到：" + target.FallbackName;
+                settingsNavigationToolTip.SetToolTip(button, target.Description + fallbackHint + "\r\nIntent: " + target.Action);
+                section.Controls.Add(button, index % columnCount, index / columnCount + 1);
+            }
         }
 
         private void BuildInstallTab()
@@ -1891,6 +2057,121 @@ namespace AdbTool
                 MessageBox.Show(this, GetMissingAdbMessage(), AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 ShowToolSettingsDialog();
             }
+        }
+
+        private void StartSettingsNavigation(SettingsNavigationTarget target)
+        {
+            if (target == null || isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
+
+            var device = GetSingleCheckedDevice("设置页跳转");
+            if (device == null) return;
+
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                HandleMissingAdb(true);
+                return;
+            }
+
+            cancelRequested = false;
+            isDeviceCommandRunning = true;
+            SetDeviceCommandUi(true);
+            statusLabel.Text = "正在打开“" + target.Name + "”...";
+            settingsNavigationStatusLabel.Text = "正在打开“" + target.Name + "”...";
+            AddLogLine("设置页跳转：" + target.Name + "（" + target.Action + "），设备：" + device.Serial);
+
+            var serial = device.Serial;
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                try
+                {
+                    var result = InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "start", "-W", "-a", target.Action }, true);
+                    var usedFallback = false;
+                    if (!result.Canceled && !IsSettingsNavigationSuccessful(result) && IsSettingsNavigationUnavailable(result)
+                        && !string.IsNullOrWhiteSpace(target.FallbackAction))
+                    {
+                        usedFallback = true;
+                        AddLogLine("设备不支持“" + target.Name + "”直达入口，尝试打开“" + target.FallbackName + "”设置。");
+                        result = InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "start", "-W", "-a", target.FallbackAction }, true);
+                    }
+                    BeginInvokeIfNeeded(delegate
+                    {
+                        if (result.Canceled)
+                        {
+                            statusLabel.Text = "设置页跳转已中止。";
+                            settingsNavigationStatusLabel.Text = "已中止打开“" + target.Name + "”。";
+                            return;
+                        }
+
+                        if (IsSettingsNavigationSuccessful(result))
+                        {
+                            if (usedFallback)
+                            {
+                                var fallbackMessage = "设备不支持“" + target.Name + "”直达入口，已打开“" + target.FallbackName + "”设置。";
+                                statusLabel.Text = fallbackMessage;
+                                settingsNavigationStatusLabel.Text = fallbackMessage;
+                                AddLogLine("设置页跳转回退成功：" + target.Name + " -> " + target.FallbackName);
+                            }
+                            else
+                            {
+                                statusLabel.Text = "已打开“" + target.Name + "”。";
+                                settingsNavigationStatusLabel.Text = "已在设备 " + serial + " 上打开“" + target.Name + "”。";
+                                AddLogLine("设置页跳转成功：" + target.Name);
+                            }
+                        }
+                        else
+                        {
+                            var failure = GetSettingsNavigationFailure(target, result);
+                            statusLabel.Text = failure;
+                            settingsNavigationStatusLabel.Text = failure;
+                            AddLogLine("设置页跳转失败：" + failure);
+                        }
+                    });
+                }
+                finally
+                {
+                    isDeviceCommandRunning = false;
+                    cancelRequested = false;
+                    BeginInvokeIfNeeded(delegate { SetDeviceCommandUi(false); });
+                }
+            }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private static bool IsSettingsNavigationSuccessful(ProcessResult result)
+        {
+            if (result == null || result.ExitCode != 0 || result.Canceled) return false;
+            var output = result.Output ?? "";
+            return output.IndexOf("unable to resolve Intent", StringComparison.OrdinalIgnoreCase) < 0
+                && output.IndexOf("Activity not found", StringComparison.OrdinalIgnoreCase) < 0
+                && output.IndexOf("SecurityException", StringComparison.OrdinalIgnoreCase) < 0
+                && output.IndexOf("Error:", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        private static bool IsSettingsNavigationUnavailable(ProcessResult result)
+        {
+            var output = result == null ? "" : result.Output ?? "";
+            return output.IndexOf("unable to resolve Intent", StringComparison.OrdinalIgnoreCase) >= 0
+                || output.IndexOf("Activity not found", StringComparison.OrdinalIgnoreCase) >= 0
+                || output.IndexOf("No activity found", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string GetSettingsNavigationFailure(SettingsNavigationTarget target, ProcessResult result)
+        {
+            var output = result == null ? "" : result.Output ?? "";
+            if (IsSettingsNavigationUnavailable(result))
+            {
+                return "设备系统不支持“" + target.Name + "”设置页。";
+            }
+            if (output.IndexOf("SecurityException", StringComparison.OrdinalIgnoreCase) >= 0
+                || output.IndexOf("Permission Denial", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "设备系统禁止通过 ADB 打开“" + target.Name + "”。";
+            }
+
+            var detail = HumanizeAdbOutput(output);
+            return "无法打开“" + target.Name + "”：" + detail;
         }
 
         private void StartDeviceInfoRefresh()
@@ -3436,6 +3717,24 @@ namespace AdbTool
             queryDeviceInfoButton.Enabled = enabled;
         }
 
+        private void SetSettingsNavigationControlsEnabled(bool enabled)
+        {
+            var scrollPosition = new Point(
+                settingsNavigationTab.HorizontalScroll.Value,
+                settingsNavigationTab.VerticalScroll.Value);
+
+            settingsNavigationTab.SuspendLayout();
+            try
+            {
+                foreach (var button in settingsNavigationButtons) button.Enabled = enabled;
+            }
+            finally
+            {
+                settingsNavigationTab.ResumeLayout(false);
+                settingsNavigationTab.AutoScrollPosition = scrollPosition;
+            }
+        }
+
         private void SetLogcatUi(bool running)
         {
             var busy = running || isExecuting || isDeviceCommandRunning || IsMediaCaptureRunning;
@@ -3476,6 +3775,7 @@ namespace AdbTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
+            SetSettingsNavigationControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             SetSoftwareManagementControlsEnabled(!busy);
             refreshButton.Enabled = !busy;
@@ -4032,6 +4332,7 @@ namespace AdbTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
+            SetSettingsNavigationControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             SetSoftwareManagementControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenshotRunning;
@@ -4632,6 +4933,7 @@ namespace AdbTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
+            SetSettingsNavigationControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             SetSoftwareManagementControlsEnabled(!busy);
             deviceList.Enabled = !busy;
@@ -6848,6 +7150,7 @@ namespace AdbTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
+            SetSettingsNavigationControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             SetSoftwareManagementControlsEnabled(!busy);
             cancelButton.Enabled = executing || isDeviceCommandRunning || IsMediaCaptureRunning;
@@ -6899,6 +7202,7 @@ namespace AdbTool
             SetScreenRecordOptionControlsEnabled(busy);
             UpdateCaptureActionButtons(busy);
             SetDeviceInfoControlsEnabled(!busy);
+            SetSettingsNavigationControlsEnabled(!busy);
             SetDisplayControlControlsEnabled(!busy);
             SetSoftwareManagementControlsEnabled(!busy);
             cancelButton.Enabled = running || isExecuting || isDeviceCommandRunning || isScreenRecordRunning;
