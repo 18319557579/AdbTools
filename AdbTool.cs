@@ -33,6 +33,10 @@ namespace AdbTool
         private const string RemoteTempFilePrefix = "adb-tool";
         private const string ApkStageDirName = "ApkStage";
         private const int MaxRecentApkFolders = 10;
+        private const int MaxRecentSettingsNavigationTargets = 10;
+        private const int SettingsNavigationColumnCount = 5;
+        private const int SettingsNavigationTitleHeight = 28;
+        private const int SettingsNavigationButtonRowHeight = 40;
         private const double DefaultDisplayScale = 1.0;
         private static readonly double[] FontScaleOptions = { 0.0, 1.0, 2.0, 3.0, 4.0 };
         private static readonly double[] AnimationScaleOptions = { 0.0, 0.5, 1.0, 1.5, 2.0, 5.0, 10.0 };
@@ -295,7 +299,13 @@ namespace AdbTool
         private readonly Button restoreDisplayAllButton = new Button();
         private readonly ToolTip displayControlToolTip = new ToolTip();
         private readonly Label settingsNavigationStatusLabel = new Label();
+        private readonly TableLayoutPanel settingsNavigationPanel = new TableLayoutPanel();
+        private readonly TableLayoutPanel recentSettingsNavigationSection = new TableLayoutPanel();
+        private readonly Label recentSettingsNavigationEmptyLabel = new Label();
         private readonly List<Button> settingsNavigationButtons = new List<Button>();
+        private readonly List<Button> recentSettingsNavigationButtons = new List<Button>();
+        private readonly List<SettingsNavigationTarget> settingsNavigationTargets = new List<SettingsNavigationTarget>();
+        private readonly List<SettingsNavigationTarget> recentSettingsNavigationTargets = new List<SettingsNavigationTarget>();
         private readonly ToolTip settingsNavigationToolTip = new ToolTip();
         private readonly ToolTip toolPathToolTip = new ToolTip();
 
@@ -393,6 +403,7 @@ namespace AdbTool
             InitScreenshotDefaults();
             LoadConfig();
             RefreshRecentApkFoldersList();
+            RefreshRecentSettingsNavigationSection();
             configReady = true;
             UpdateToolPathStatus();
             UpdateExecutionOptionState();
@@ -463,23 +474,24 @@ namespace AdbTool
             settingsNavigationTab.Padding = new Padding(10);
             settingsNavigationTab.AutoScroll = true;
 
-            var panel = new TableLayoutPanel();
-            panel.Dock = DockStyle.Top;
-            panel.ColumnCount = 1;
-            panel.RowCount = 1;
-            panel.Height = 38;
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-            settingsNavigationTab.Controls.Add(panel);
+            settingsNavigationPanel.Dock = DockStyle.Top;
+            settingsNavigationPanel.ColumnCount = 1;
+            settingsNavigationPanel.RowCount = 1;
+            settingsNavigationPanel.Height = 38;
+            settingsNavigationPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            settingsNavigationPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            settingsNavigationTab.Controls.Add(settingsNavigationPanel);
 
             settingsNavigationStatusLabel.Text = "就绪：请在下方目标设备列表中勾选一台 device 状态设备。";
             settingsNavigationStatusLabel.Dock = DockStyle.Fill;
             settingsNavigationStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
             settingsNavigationStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
             settingsNavigationStatusLabel.AutoEllipsis = true;
-            panel.Controls.Add(settingsNavigationStatusLabel, 0, 0);
+            settingsNavigationPanel.Controls.Add(settingsNavigationStatusLabel, 0, 0);
 
-            AddSettingsNavigationSection(panel, "常用设置", new[]
+            AddRecentSettingsNavigationSection(settingsNavigationPanel);
+
+            AddSettingsNavigationSection(settingsNavigationPanel, "常用设置", new[]
             {
                 new SettingsNavigationTarget("设置首页", "android.settings.SETTINGS", "打开系统设置首页。"),
                 new SettingsNavigationTarget("Wi-Fi", "android.settings.WIFI_SETTINGS", "打开 Wi-Fi 设置。"),
@@ -490,7 +502,7 @@ namespace AdbTool
                 new SettingsNavigationTarget("VPN", "android.settings.VPN_SETTINGS", "打开 VPN 设置。")
             });
 
-            AddSettingsNavigationSection(panel, "网络与连接", new[]
+            AddSettingsNavigationSection(settingsNavigationPanel, "网络与连接", new[]
             {
                 new SettingsNavigationTarget("无线与网络", "android.settings.WIRELESS_SETTINGS", "打开无线与网络综合设置。"),
                 new SettingsNavigationTarget("网络共享", "android.settings.TETHER_SETTINGS", "打开热点与网络共享设置。"),
@@ -503,7 +515,7 @@ namespace AdbTool
                 new SettingsNavigationTarget("接入点 APN", "android.settings.APN_SETTINGS", "打开移动网络接入点设置。")
             });
 
-            AddSettingsNavigationSection(panel, "显示与声音", new[]
+            AddSettingsNavigationSection(settingsNavigationPanel, "显示与声音", new[]
             {
                 new SettingsNavigationTarget("显示", "android.settings.DISPLAY_SETTINGS", "打开显示设置。"),
                 new SettingsNavigationTarget("声音", "android.settings.SOUND_SETTINGS", "打开声音设置。"),
@@ -514,7 +526,7 @@ namespace AdbTool
                 new SettingsNavigationTarget("屏保", "android.settings.DREAM_SETTINGS", "打开屏幕保护设置。")
             });
 
-            AddSettingsNavigationSection(panel, "系统与隐私", new[]
+            AddSettingsNavigationSection(settingsNavigationPanel, "系统与隐私", new[]
             {
                 new SettingsNavigationTarget("省电模式", "android.settings.BATTERY_SAVER_SETTINGS", "打开省电模式设置。"),
                 new SettingsNavigationTarget("存储", "android.settings.INTERNAL_STORAGE_SETTINGS", "打开内部存储设置。"),
@@ -527,7 +539,7 @@ namespace AdbTool
                 new SettingsNavigationTarget("键盘与输入法", "android.settings.INPUT_METHOD_SETTINGS", "打开键盘与输入法设置。")
             });
 
-            AddSettingsNavigationSection(panel, "应用与账号", new[]
+            AddSettingsNavigationSection(settingsNavigationPanel, "应用与账号", new[]
             {
                 new SettingsNavigationTarget("应用设置", "android.settings.APPLICATION_SETTINGS", "打开应用设置。"),
                 new SettingsNavigationTarget("应用列表", "android.settings.MANAGE_APPLICATIONS_SETTINGS", "打开已安装应用列表。"),
@@ -539,7 +551,7 @@ namespace AdbTool
                 new SettingsNavigationTarget("主屏幕应用", "android.settings.HOME_SETTINGS", "打开默认桌面应用设置。")
             });
 
-            AddSettingsNavigationSection(panel, "系统高级", new[]
+            AddSettingsNavigationSection(settingsNavigationPanel, "系统高级", new[]
             {
                 new SettingsNavigationTarget("开发者选项", "android.settings.APPLICATION_DEVELOPMENT_SETTINGS", "打开开发者选项。"),
                 new SettingsNavigationTarget("关于手机", "android.settings.DEVICE_INFO_SETTINGS", "打开关于手机页面。"),
@@ -550,13 +562,60 @@ namespace AdbTool
             });
         }
 
+        private void AddRecentSettingsNavigationSection(TableLayoutPanel parent)
+        {
+            var parentRow = parent.RowCount;
+            var sectionHeight = SettingsNavigationTitleHeight + SettingsNavigationButtonRowHeight * 2;
+            parent.RowCount++;
+            parent.RowStyles.Add(new RowStyle(SizeType.Absolute, sectionHeight));
+            parent.Height += sectionHeight;
+
+            recentSettingsNavigationSection.Dock = DockStyle.Fill;
+            recentSettingsNavigationSection.Margin = new Padding(0, 0, 0, 4);
+            recentSettingsNavigationSection.ColumnCount = SettingsNavigationColumnCount;
+            recentSettingsNavigationSection.RowCount = 3;
+            for (var column = 0; column < SettingsNavigationColumnCount; column++)
+            {
+                recentSettingsNavigationSection.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            }
+            recentSettingsNavigationSection.RowStyles.Add(new RowStyle(SizeType.Absolute, SettingsNavigationTitleHeight));
+            recentSettingsNavigationSection.RowStyles.Add(new RowStyle(SizeType.Absolute, SettingsNavigationButtonRowHeight));
+            recentSettingsNavigationSection.RowStyles.Add(new RowStyle(SizeType.Absolute, SettingsNavigationButtonRowHeight));
+            parent.Controls.Add(recentSettingsNavigationSection, 0, parentRow);
+
+            var titleLabel = new Label();
+            titleLabel.Text = "最近使用";
+            titleLabel.Dock = DockStyle.Fill;
+            titleLabel.TextAlign = ContentAlignment.MiddleLeft;
+            titleLabel.ForeColor = Color.FromArgb(60, 60, 60);
+            recentSettingsNavigationSection.Controls.Add(titleLabel, 0, 0);
+            recentSettingsNavigationSection.SetColumnSpan(titleLabel, SettingsNavigationColumnCount);
+
+            recentSettingsNavigationEmptyLabel.Text = "暂无最近使用";
+            recentSettingsNavigationEmptyLabel.Dock = DockStyle.Fill;
+            recentSettingsNavigationEmptyLabel.TextAlign = ContentAlignment.MiddleLeft;
+            recentSettingsNavigationEmptyLabel.ForeColor = Color.FromArgb(120, 120, 120);
+            recentSettingsNavigationSection.Controls.Add(recentSettingsNavigationEmptyLabel, 0, 1);
+            recentSettingsNavigationSection.SetColumnSpan(recentSettingsNavigationEmptyLabel, SettingsNavigationColumnCount);
+            recentSettingsNavigationSection.SetRowSpan(recentSettingsNavigationEmptyLabel, 2);
+
+            for (var index = 0; index < MaxRecentSettingsNavigationTargets; index++)
+            {
+                var button = new Button();
+                button.Dock = DockStyle.Fill;
+                button.Margin = new Padding(0, 3, 8, 3);
+                button.Visible = false;
+                button.Click += OnRecentSettingsNavigationButtonClick;
+                recentSettingsNavigationButtons.Add(button);
+                settingsNavigationButtons.Add(button);
+                recentSettingsNavigationSection.Controls.Add(button, index % SettingsNavigationColumnCount, index / SettingsNavigationColumnCount + 1);
+            }
+        }
+
         private void AddSettingsNavigationSection(TableLayoutPanel parent, string title, SettingsNavigationTarget[] targets)
         {
-            const int columnCount = 5;
-            const int titleHeight = 28;
-            const int buttonRowHeight = 40;
-            var buttonRowCount = (targets.Length + columnCount - 1) / columnCount;
-            var sectionHeight = titleHeight + buttonRowCount * buttonRowHeight;
+            var buttonRowCount = (targets.Length + SettingsNavigationColumnCount - 1) / SettingsNavigationColumnCount;
+            var sectionHeight = SettingsNavigationTitleHeight + buttonRowCount * SettingsNavigationButtonRowHeight;
             var parentRow = parent.RowCount;
 
             parent.RowCount++;
@@ -566,11 +625,11 @@ namespace AdbTool
             var section = new TableLayoutPanel();
             section.Dock = DockStyle.Fill;
             section.Margin = new Padding(0, 0, 0, 4);
-            section.ColumnCount = columnCount;
+            section.ColumnCount = SettingsNavigationColumnCount;
             section.RowCount = buttonRowCount + 1;
-            for (var column = 0; column < columnCount; column++) section.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
-            section.RowStyles.Add(new RowStyle(SizeType.Absolute, titleHeight));
-            for (var row = 0; row < buttonRowCount; row++) section.RowStyles.Add(new RowStyle(SizeType.Absolute, buttonRowHeight));
+            for (var column = 0; column < SettingsNavigationColumnCount; column++) section.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+            section.RowStyles.Add(new RowStyle(SizeType.Absolute, SettingsNavigationTitleHeight));
+            for (var row = 0; row < buttonRowCount; row++) section.RowStyles.Add(new RowStyle(SizeType.Absolute, SettingsNavigationButtonRowHeight));
             parent.Controls.Add(section, 0, parentRow);
 
             var titleLabel = new Label();
@@ -579,21 +638,33 @@ namespace AdbTool
             titleLabel.TextAlign = ContentAlignment.MiddleLeft;
             titleLabel.ForeColor = Color.FromArgb(60, 60, 60);
             section.Controls.Add(titleLabel, 0, 0);
-            section.SetColumnSpan(titleLabel, columnCount);
+            section.SetColumnSpan(titleLabel, SettingsNavigationColumnCount);
 
             for (var index = 0; index < targets.Length; index++)
             {
                 var target = targets[index];
+                settingsNavigationTargets.Add(target);
                 var button = new Button();
                 button.Text = target.Name;
                 button.Dock = DockStyle.Fill;
                 button.Margin = new Padding(0, 3, 8, 3);
                 button.Click += delegate { StartSettingsNavigation(target); };
                 settingsNavigationButtons.Add(button);
-                var fallbackHint = string.IsNullOrWhiteSpace(target.FallbackAction) ? "" : "\r\n不支持时回退到：" + target.FallbackName;
-                settingsNavigationToolTip.SetToolTip(button, target.Description + fallbackHint + "\r\nIntent: " + target.Action);
-                section.Controls.Add(button, index % columnCount, index / columnCount + 1);
+                settingsNavigationToolTip.SetToolTip(button, GetSettingsNavigationToolTip(target));
+                section.Controls.Add(button, index % SettingsNavigationColumnCount, index / SettingsNavigationColumnCount + 1);
             }
+        }
+
+        private static string GetSettingsNavigationToolTip(SettingsNavigationTarget target)
+        {
+            var fallbackHint = string.IsNullOrWhiteSpace(target.FallbackAction) ? "" : "\r\n不支持时回退到：" + target.FallbackName;
+            return target.Description + fallbackHint + "\r\nIntent: " + target.Action;
+        }
+
+        private void OnRecentSettingsNavigationButtonClick(object sender, EventArgs e)
+        {
+            var button = sender as Button;
+            StartSettingsNavigation(button == null ? null : button.Tag as SettingsNavigationTarget);
         }
 
         private void BuildInstallTab()
@@ -2082,6 +2153,8 @@ namespace AdbTool
                 HandleMissingAdb(true);
                 return;
             }
+
+            AddRecentSettingsNavigationTarget(target);
 
             cancelRequested = false;
             isDeviceCommandRunning = true;
@@ -5717,6 +5790,59 @@ namespace AdbTool
             }
         }
 
+        private void AddRecentSettingsNavigationTarget(SettingsNavigationTarget target)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(target.Action)) return;
+            recentSettingsNavigationTargets.RemoveAll(item => string.Equals(item.Action, target.Action, StringComparison.OrdinalIgnoreCase));
+            recentSettingsNavigationTargets.Insert(0, target);
+            if (recentSettingsNavigationTargets.Count > MaxRecentSettingsNavigationTargets)
+            {
+                recentSettingsNavigationTargets.RemoveRange(
+                    MaxRecentSettingsNavigationTargets,
+                    recentSettingsNavigationTargets.Count - MaxRecentSettingsNavigationTargets);
+            }
+            RefreshRecentSettingsNavigationSection();
+            SaveConfig();
+        }
+
+        private void LoadRecentSettingsNavigationTargets(string json)
+        {
+            recentSettingsNavigationTargets.Clear();
+            foreach (var action in ReadJsonStringArray(json, "recentSettingsNavigationActions"))
+            {
+                var target = settingsNavigationTargets.FirstOrDefault(item => string.Equals(item.Action, action, StringComparison.OrdinalIgnoreCase));
+                if (target == null) continue;
+                if (recentSettingsNavigationTargets.Any(item => string.Equals(item.Action, target.Action, StringComparison.OrdinalIgnoreCase))) continue;
+                recentSettingsNavigationTargets.Add(target);
+                if (recentSettingsNavigationTargets.Count == MaxRecentSettingsNavigationTargets) break;
+            }
+        }
+
+        private void RefreshRecentSettingsNavigationSection()
+        {
+            if (recentSettingsNavigationButtons.Count == 0) return;
+
+            recentSettingsNavigationSection.SuspendLayout();
+            try
+            {
+                recentSettingsNavigationEmptyLabel.Visible = recentSettingsNavigationTargets.Count == 0;
+
+                for (var index = 0; index < recentSettingsNavigationButtons.Count; index++)
+                {
+                    var button = recentSettingsNavigationButtons[index];
+                    var target = index < recentSettingsNavigationTargets.Count ? recentSettingsNavigationTargets[index] : null;
+                    button.Tag = target;
+                    button.Text = target == null ? "" : target.Name;
+                    button.Visible = target != null;
+                    settingsNavigationToolTip.SetToolTip(button, target == null ? "" : GetSettingsNavigationToolTip(target));
+                }
+            }
+            finally
+            {
+                recentSettingsNavigationSection.ResumeLayout(true);
+            }
+        }
+
         private void LoadConfig()
         {
             try
@@ -5729,6 +5855,7 @@ namespace AdbTool
                 configuredAdbPath = NormalizeToolPathSetting(ReadJsonString(json, "adbPath"));
                 configuredAaptPath = NormalizeToolPathSetting(ReadJsonString(json, "aaptPath"));
                 LoadRecentApkFolders(json);
+                LoadRecentSettingsNavigationTargets(json);
 
                 var windowWidth = ReadJsonInt(json, "windowWidth");
                 var windowHeight = ReadJsonInt(json, "windowHeight");
@@ -5832,6 +5959,7 @@ namespace AdbTool
                     "    \"aaptPath\":  \"" + EscapeJsonString(configuredAaptPath) + "\",\r\n" +
                     "    \"lastApkPath\":  \"" + EscapeJsonString(lastApkPath) + "\",\r\n" +
                     "    \"recentApkFolders\":  " + FormatJsonStringArray(recentApkFolders) + ",\r\n" +
+                    "    \"recentSettingsNavigationActions\":  " + FormatJsonStringArray(recentSettingsNavigationTargets.Select(target => target.Action)) + ",\r\n" +
                     "    \"softwarePackageName\":  \"" + EscapeJsonString(softwarePackageTextBox.Text) + "\",\r\n" +
                     "    \"softwareAutoFill\":  " + (softwareAutoFillCheckBox.Checked ? "true" : "false") + ",\r\n" +
                     "    \"windowWidth\":  " + windowSize.Width.ToString() + ",\r\n" +
