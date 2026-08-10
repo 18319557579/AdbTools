@@ -145,6 +145,8 @@ namespace AdbTool
             public string Description;
             public string FallbackName;
             public string FallbackAction;
+            public string[] CompatibilityActions = new string[0];
+            public string CompatibilityComponent;
 
             public SettingsNavigationTarget(string name, string action, string description)
                 : this(name, action, description, "", "")
@@ -158,6 +160,13 @@ namespace AdbTool
                 Description = description;
                 FallbackName = fallbackName;
                 FallbackAction = fallbackAction;
+            }
+
+            public SettingsNavigationTarget(string name, string action, string description, string[] compatibilityActions, string compatibilityComponent)
+                : this(name, action, description)
+            {
+                CompatibilityActions = compatibilityActions ?? new string[0];
+                CompatibilityComponent = compatibilityComponent ?? "";
             }
         }
 
@@ -485,6 +494,7 @@ namespace AdbTool
             {
                 new SettingsNavigationTarget("无线与网络", "android.settings.WIRELESS_SETTINGS", "打开无线与网络综合设置。"),
                 new SettingsNavigationTarget("网络共享", "android.settings.TETHER_SETTINGS", "打开热点与网络共享设置。"),
+                new SettingsNavigationTarget("USB 连接用途", "android.settings.USB_SETTINGS", "打开“USB 连接用于”页面或弹窗，可选择仅充电、传输文件或传输照片。", new[] { "android.settings.STORAGE_USB_SETTINGS" }, "com.android.settings/.Settings$UsbDetailsActivity"),
                 new SettingsNavigationTarget("数据漫游", "android.settings.DATA_ROAMING_SETTINGS", "打开数据漫游设置。"),
                 new SettingsNavigationTarget("NFC", "android.settings.NFC_SETTINGS", "打开 NFC 设置。"),
                 new SettingsNavigationTarget("无线投屏", "android.settings.CAST_SETTINGS", "打开投屏或无线显示设置。", "无线与网络", "android.settings.WIRELESS_SETTINGS"),
@@ -2085,14 +2095,35 @@ namespace AdbTool
             {
                 try
                 {
-                    var result = InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "start", "-W", "-a", target.Action }, true);
+                    var result = InvokeSettingsNavigationAction(adb, serial, target.Action);
+                    var usedCompatibilityRoute = false;
+                    var compatibilityRoute = "";
+                    if (!result.Canceled && !IsSettingsNavigationSuccessful(result) && IsSettingsNavigationUnavailable(result))
+                    {
+                        foreach (var compatibilityAction in target.CompatibilityActions)
+                        {
+                            usedCompatibilityRoute = true;
+                            compatibilityRoute = compatibilityAction;
+                            AddLogLine("设备不支持标准入口，尝试兼容 Intent：" + compatibilityAction);
+                            result = InvokeSettingsNavigationAction(adb, serial, compatibilityAction);
+                            if (result.Canceled || !IsSettingsNavigationUnavailable(result)) break;
+                        }
+                    }
+                    if (!result.Canceled && !IsSettingsNavigationSuccessful(result) && IsSettingsNavigationUnavailable(result)
+                        && !string.IsNullOrWhiteSpace(target.CompatibilityComponent))
+                    {
+                        usedCompatibilityRoute = true;
+                        compatibilityRoute = target.CompatibilityComponent;
+                        AddLogLine("Intent 入口不可用，尝试兼容组件：" + target.CompatibilityComponent);
+                        result = InvokeSettingsNavigationComponent(adb, serial, target.CompatibilityComponent);
+                    }
                     var usedFallback = false;
                     if (!result.Canceled && !IsSettingsNavigationSuccessful(result) && IsSettingsNavigationUnavailable(result)
                         && !string.IsNullOrWhiteSpace(target.FallbackAction))
                     {
                         usedFallback = true;
                         AddLogLine("设备不支持“" + target.Name + "”直达入口，尝试打开“" + target.FallbackName + "”设置。");
-                        result = InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "start", "-W", "-a", target.FallbackAction }, true);
+                        result = InvokeSettingsNavigationAction(adb, serial, target.FallbackAction);
                     }
                     BeginInvokeIfNeeded(delegate
                     {
@@ -2116,7 +2147,9 @@ namespace AdbTool
                             {
                                 statusLabel.Text = "已打开“" + target.Name + "”。";
                                 settingsNavigationStatusLabel.Text = "已在设备 " + serial + " 上打开“" + target.Name + "”。";
-                                AddLogLine("设置页跳转成功：" + target.Name);
+                                AddLogLine(usedCompatibilityRoute
+                                    ? "设置页跳转兼容入口成功：" + target.Name + "（" + compatibilityRoute + "）"
+                                    : "设置页跳转成功：" + target.Name);
                             }
                         }
                         else
@@ -2137,6 +2170,17 @@ namespace AdbTool
             }));
             thread.IsBackground = true;
             thread.Start();
+        }
+
+        private ProcessResult InvokeSettingsNavigationAction(string adb, string serial, string action)
+        {
+            return InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "start", "-W", "-a", action }, true);
+        }
+
+        private ProcessResult InvokeSettingsNavigationComponent(string adb, string serial, string component)
+        {
+            var escapedComponent = (component ?? "").Replace("$", "\\$");
+            return InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "start", "-W", "-n", escapedComponent }, true);
         }
 
         private static bool IsSettingsNavigationSuccessful(ProcessResult result)
