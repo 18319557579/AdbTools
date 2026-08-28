@@ -37,9 +37,15 @@ namespace AdbTool
         private const int SettingsNavigationColumnCount = 5;
         private const int SettingsNavigationTitleHeight = 28;
         private const int SettingsNavigationButtonRowHeight = 40;
+        private const string DocumentsUiResetTaskFlags = "0x10008000";
         private const double DefaultDisplayScale = 1.0;
         private static readonly double[] FontScaleOptions = { 0.0, 1.0, 2.0, 3.0, 4.0 };
         private static readonly double[] AnimationScaleOptions = { 0.0, 0.5, 1.0, 1.5, 2.0, 5.0, 10.0 };
+        private static readonly string[] DocumentsUiComponents =
+        {
+            "com.android.documentsui/.files.FilesActivity",
+            "com.google.android.documentsui/.files.FilesActivity"
+        };
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern int GetShortPathName(string longPath, StringBuilder shortPath, int bufferLength);
@@ -48,6 +54,14 @@ namespace AdbTool
         {
             ToDevice,
             ToComputer
+        }
+
+        private enum DevicePathKind
+        {
+            Unknown,
+            Directory,
+            File,
+            Missing
         }
 
         private enum CaptureMediaType
@@ -1920,8 +1934,16 @@ namespace AdbTool
             stopLogRecordButton.Click += delegate { StopLogcatRecording(); };
             transferToDeviceRadioButton.CheckedChanged += delegate { OnTransferDirectionChanged(); };
             transferToComputerRadioButton.CheckedChanged += delegate { OnTransferDirectionChanged(); };
-            browseTransferButton.Click += delegate { ShowTransferBrowseMenu(); };
-            browseTransferTargetButton.Click += delegate { BrowseTransferTarget(); };
+            browseTransferButton.Click += delegate
+            {
+                if (CurrentTransferDirection == TransferDirection.ToComputer) StartOpenTransferDevicePath();
+                else ShowTransferBrowseMenu();
+            };
+            browseTransferTargetButton.Click += delegate
+            {
+                if (CurrentTransferDirection == TransferDirection.ToDevice) StartOpenTransferDevicePath();
+                else BrowseTransferTarget();
+            };
             browseTransferFileMenuItem.Click += delegate { BrowseTransferFile(); };
             browseTransferFolderMenuItem.Click += delegate { BrowseTransferFolder(); };
             sendTransferButton.Click += delegate { StartFileTransfer(); };
@@ -6145,12 +6167,13 @@ namespace AdbTool
 
         private void UpdateTransferBrowseButtons()
         {
-            var canBrowseSource = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && !IsMediaCaptureRunning && CurrentTransferDirection == TransferDirection.ToDevice;
-            var canBrowseTarget = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && !IsMediaCaptureRunning && CurrentTransferDirection == TransferDirection.ToComputer;
-            browseTransferButton.Enabled = canBrowseSource;
-            browseTransferButton.Visible = canBrowseSource;
-            browseTransferTargetButton.Enabled = canBrowseTarget;
-            browseTransferTargetButton.Visible = canBrowseTarget;
+            var enabled = !isExecuting && !isDeviceCommandRunning && !isLogcatRunning && !IsMediaCaptureRunning;
+            browseTransferButton.Text = CurrentTransferDirection == TransferDirection.ToComputer ? "\u6253\u5f00" : "\u9009\u62e9...";
+            browseTransferTargetButton.Text = CurrentTransferDirection == TransferDirection.ToDevice ? "\u6253\u5f00" : "\u9009\u62e9...";
+            browseTransferButton.Enabled = enabled;
+            browseTransferButton.Visible = true;
+            browseTransferTargetButton.Enabled = enabled;
+            browseTransferTargetButton.Visible = true;
         }
 
         private void ShowTransferBrowseMenu()
@@ -6193,6 +6216,250 @@ namespace AdbTool
                 if (!string.IsNullOrEmpty(currentDir)) dialog.SelectedPath = currentDir;
                 if (dialog.ShowDialog(this) == DialogResult.OK) transferPathTextBox.Text = dialog.SelectedPath;
             }
+        }
+
+        private void StartOpenTransferDevicePath()
+        {
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
+
+            var direction = CurrentTransferDirection;
+            var devicePath = NormalizeDevicePath(direction == TransferDirection.ToComputer
+                ? transferPathTextBox.Text
+                : transferTargetDirTextBox.Text);
+            if (string.IsNullOrWhiteSpace(devicePath))
+            {
+                MessageBox.Show(this, direction == TransferDirection.ToComputer
+                    ? "\u8bf7\u8f93\u5165\u8bbe\u5907\u4e0a\u7684\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u8def\u5f84\u3002"
+                    : "\u8bf7\u8f93\u5165\u8bbe\u5907\u76ee\u5f55\u3002", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var device = GetSingleCheckedDevice("\u6253\u5f00\u8bbe\u5907\u76ee\u5f55");
+            if (device == null) return;
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                HandleMissingAdb(true);
+                return;
+            }
+
+            cancelRequested = false;
+            isDeviceCommandRunning = true;
+            SetDeviceCommandUi(true);
+            var openingMessage = "\u6b63\u5728\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\uff1a" + devicePath;
+            statusLabel.Text = openingMessage;
+            transferStatusLabel.Text = openingMessage;
+            AddLogLine(openingMessage + "\uff0c\u8bbe\u5907\uff1a" + device.Serial);
+
+            var serial = device.Serial;
+            var allowFileParent = direction == TransferDirection.ToComputer;
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                try
+                {
+                    OpenTransferDevicePath(adb, serial, devicePath, allowFileParent);
+                }
+                catch (Exception ex)
+                {
+                    var failure = "\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\u5f02\u5e38\uff1a" + ex.Message;
+                    AddLogLine(failure);
+                    SetTransferOpenStatus(failure);
+                }
+                finally
+                {
+                    isDeviceCommandRunning = false;
+                    cancelRequested = false;
+                    BeginInvokeIfNeeded(delegate { SetDeviceCommandUi(false); });
+                }
+            }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private void OpenTransferDevicePath(string adb, string serial, string devicePath, bool allowFileParent)
+        {
+            var pathKind = GetDevicePathKind(adb, serial, devicePath);
+            if (cancelRequested)
+            {
+                SetTransferOpenStatus("\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\u5df2\u4e2d\u6b62\u3002");
+                return;
+            }
+            if (pathKind == DevicePathKind.Unknown)
+            {
+                SetTransferOpenStatus("\u65e0\u6cd5\u68c0\u67e5\u8bbe\u5907\u8def\u5f84\uff0c\u8bf7\u67e5\u770b\u65e5\u5fd7\u3002");
+                return;
+            }
+            if (pathKind == DevicePathKind.Missing)
+            {
+                SetTransferOpenStatus("\u8bbe\u5907\u8def\u5f84\u4e0d\u5b58\u5728\u6216\u4e0d\u53ef\u8bbf\u95ee\uff1a" + devicePath);
+                return;
+            }
+            if (pathKind == DevicePathKind.File && !allowFileParent)
+            {
+                SetTransferOpenStatus("\u8bbe\u5907\u76ee\u5f55\u4e0d\u80fd\u662f\u6587\u4ef6\uff1a" + devicePath);
+                return;
+            }
+
+            var directoryPath = pathKind == DevicePathKind.File ? GetDeviceParentDirectory(devicePath) : devicePath;
+            string directoryUri;
+            if (TryBuildDocumentsUiDirectoryUri(directoryPath, out directoryUri))
+            {
+                string component;
+                if (TryStartDocumentsUi(adb, serial, directoryUri, out component))
+                {
+                    var success = pathKind == DevicePathKind.File
+                        ? "\u5df2\u6253\u5f00\u6587\u4ef6\u6240\u5728\u76ee\u5f55\uff1a" + directoryPath
+                        : "\u5df2\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\uff1a" + directoryPath;
+                    AddLogLine(success + "\uff08" + component + "\uff09");
+                    SetTransferOpenStatus(success);
+                    return;
+                }
+                if (cancelRequested)
+                {
+                    SetTransferOpenStatus("\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\u5df2\u4e2d\u6b62\u3002");
+                    return;
+                }
+            }
+
+            string fallbackComponent;
+            if (TryStartDocumentsUiHome(adb, serial, out fallbackComponent))
+            {
+                var fallback = string.IsNullOrWhiteSpace(directoryUri)
+                    ? "\u8be5\u8def\u5f84\u4e0d\u5c5e\u4e8e\u53ef\u76f4\u63a5\u6253\u5f00\u7684\u5171\u4eab\u5b58\u50a8\uff0c\u5df2\u6253\u5f00\u6587\u4ef6\u7ba1\u7406\u5668\u9996\u9875\u3002"
+                    : "\u8bbe\u5907\u4e0d\u652f\u6301\u7cbe\u786e\u6253\u5f00\u8be5\u76ee\u5f55\uff0c\u5df2\u6253\u5f00\u6587\u4ef6\u7ba1\u7406\u5668\u9996\u9875\u3002";
+                AddLogLine(fallback + "\uff08" + fallbackComponent + "\uff09");
+                SetTransferOpenStatus(fallback);
+                return;
+            }
+
+            if (cancelRequested)
+            {
+                SetTransferOpenStatus("\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\u5df2\u4e2d\u6b62\u3002");
+                return;
+            }
+            SetTransferOpenStatus("\u65e0\u6cd5\u6253\u5f00\u8bbe\u5907\u6587\u4ef6\u7ba1\u7406\u5668\uff0c\u8bbe\u5907\u7cfb\u7edf\u53ef\u80fd\u4e0d\u652f\u6301 DocumentsUI\u3002");
+        }
+
+        private DevicePathKind GetDevicePathKind(string adb, string serial, string devicePath)
+        {
+            var quotedPath = ShellQuote(devicePath);
+            var directoryResult = InvokeProcessQuiet(adb, new[] { "-s", serial, "shell", "test", "-d", quotedPath }, true);
+            if (directoryResult.Canceled) return DevicePathKind.Unknown;
+            if (directoryResult.ExitCode == 0) return DevicePathKind.Directory;
+
+            var fileResult = InvokeProcessQuiet(adb, new[] { "-s", serial, "shell", "test", "-f", quotedPath }, true);
+            if (fileResult.Canceled) return DevicePathKind.Unknown;
+            if (fileResult.ExitCode == 0) return DevicePathKind.File;
+
+            var directoryOutput = (directoryResult.Output ?? "").Trim();
+            var fileOutput = (fileResult.Output ?? "").Trim();
+            if (directoryOutput.Length > 0 || fileOutput.Length > 0)
+            {
+                AddLogLine("\u68c0\u67e5\u8bbe\u5907\u8def\u5f84\u5931\u8d25\uff1a" + HumanizeAdbOutput(directoryOutput.Length > 0 ? directoryOutput : fileOutput));
+                return DevicePathKind.Unknown;
+            }
+            return DevicePathKind.Missing;
+        }
+
+        private bool TryStartDocumentsUi(string adb, string serial, string directoryUri, out string usedComponent)
+        {
+            usedComponent = "";
+            foreach (var component in DocumentsUiComponents)
+            {
+                var result = InvokeProcess(adb, new[]
+                {
+                    "-s", serial, "shell", "am", "start", "-W", "-f", DocumentsUiResetTaskFlags, "-n", component,
+                    "-a", "android.intent.action.VIEW", "-d", directoryUri,
+                    "-t", "vnd.android.document/directory"
+                }, true);
+                if (result.Canceled) return false;
+                if (!IsSettingsNavigationSuccessful(result)) continue;
+                usedComponent = component;
+                return true;
+            }
+            return false;
+        }
+
+        private bool TryStartDocumentsUiHome(string adb, string serial, out string usedComponent)
+        {
+            usedComponent = "";
+            foreach (var component in DocumentsUiComponents)
+            {
+                var result = InvokeProcess(adb, new[]
+                {
+                    "-s", serial, "shell", "am", "start", "-W", "-f", DocumentsUiResetTaskFlags, "-n", component,
+                    "-a", "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER"
+                }, true);
+                if (result.Canceled) return false;
+                if (!IsSettingsNavigationSuccessful(result)) continue;
+                usedComponent = component;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryBuildDocumentsUiDirectoryUri(string devicePath, out string directoryUri)
+        {
+            directoryUri = "";
+            var path = NormalizeDeviceDirectory(devicePath);
+            if (string.IsNullOrWhiteSpace(path)) return false;
+
+            string volumeName;
+            string relativePath;
+            if (TryGetRelativeSharedStoragePath(path, "/sdcard", out relativePath)
+                || TryGetRelativeSharedStoragePath(path, "/mnt/sdcard", out relativePath)
+                || TryGetRelativeSharedStoragePath(path, "/storage/emulated/0", out relativePath)
+                || TryGetRelativeSharedStoragePath(path, "/storage/emulated/legacy", out relativePath)
+                || TryGetRelativeSharedStoragePath(path, "/storage/self/primary", out relativePath))
+            {
+                volumeName = "primary";
+            }
+            else if (path.StartsWith("/storage/", StringComparison.OrdinalIgnoreCase))
+            {
+                var storagePath = path.Substring("/storage/".Length);
+                var separatorIndex = storagePath.IndexOf('/');
+                volumeName = separatorIndex >= 0 ? storagePath.Substring(0, separatorIndex) : storagePath;
+                relativePath = separatorIndex >= 0 ? storagePath.Substring(separatorIndex + 1) : "";
+                if (string.IsNullOrWhiteSpace(volumeName)
+                    || string.Equals(volumeName, "emulated", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(volumeName, "self", StringComparison.OrdinalIgnoreCase)) return false;
+            }
+            else
+            {
+                return false;
+            }
+
+            var documentId = volumeName + ":" + relativePath.Trim('/');
+            directoryUri = "content://com.android.externalstorage.documents/document/" + Uri.EscapeDataString(documentId);
+            return true;
+        }
+
+        private static bool TryGetRelativeSharedStoragePath(string path, string rootPath, out string relativePath)
+        {
+            relativePath = "";
+            if (string.Equals(path, rootPath, StringComparison.OrdinalIgnoreCase)) return true;
+            var prefix = rootPath + "/";
+            if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+            relativePath = path.Substring(prefix.Length);
+            return true;
+        }
+
+        private static string GetDeviceParentDirectory(string devicePath)
+        {
+            var path = NormalizeDevicePath(devicePath);
+            if (string.IsNullOrWhiteSpace(path) || path == "/") return "/";
+            var separatorIndex = path.LastIndexOf('/');
+            return separatorIndex <= 0 ? "/" : path.Substring(0, separatorIndex);
+        }
+
+        private void SetTransferOpenStatus(string message)
+        {
+            AddLogLine(message);
+            BeginInvokeIfNeeded(delegate
+            {
+                statusLabel.Text = message;
+                transferStatusLabel.Text = message;
+            });
         }
 
         private void UpdateTransferStatus()
