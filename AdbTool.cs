@@ -37,6 +37,7 @@ namespace AdbTool
         private const int SettingsNavigationColumnCount = 5;
         private const int SettingsNavigationTitleHeight = 28;
         private const int SettingsNavigationButtonRowHeight = 40;
+        private const string DefaultSettingsNavigationDevicePath = "/sdcard";
         private const string DocumentsUiResetTaskFlags = "0x10008000";
         private const double DefaultDisplayScale = 1.0;
         private static readonly double[] FontScaleOptions = { 0.0, 1.0, 2.0, 3.0, 4.0 };
@@ -312,8 +313,9 @@ namespace AdbTool
         private readonly Button restoreAnimationScaleButton = new Button();
         private readonly Button restoreDisplayAllButton = new Button();
         private readonly ToolTip displayControlToolTip = new ToolTip();
-        private readonly Label settingsNavigationStatusLabel = new Label();
         private readonly TableLayoutPanel settingsNavigationPanel = new TableLayoutPanel();
+        private readonly TextBox settingsNavigationDevicePathTextBox = new TextBox();
+        private readonly Button openSettingsNavigationDevicePathButton = new Button();
         private readonly TableLayoutPanel recentSettingsNavigationSection = new TableLayoutPanel();
         private readonly Label recentSettingsNavigationEmptyLabel = new Label();
         private readonly List<Button> settingsNavigationButtons = new List<Button>();
@@ -385,6 +387,7 @@ namespace AdbTool
         private string configuredAdbPath = "";
         private string configuredAaptPath = "";
         private string lastConnectAddress = "";
+        private string lastSettingsNavigationDevicePath = DefaultSettingsNavigationDevicePath;
 
         private bool IsMediaCaptureRunning
         {
@@ -491,17 +494,40 @@ namespace AdbTool
             settingsNavigationPanel.Dock = DockStyle.Top;
             settingsNavigationPanel.ColumnCount = 1;
             settingsNavigationPanel.RowCount = 1;
-            settingsNavigationPanel.Height = 38;
+            settingsNavigationPanel.Height = 42;
             settingsNavigationPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            settingsNavigationPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+            settingsNavigationPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
             settingsNavigationTab.Controls.Add(settingsNavigationPanel);
 
-            settingsNavigationStatusLabel.Text = "就绪：请在下方目标设备列表中勾选一台 device 状态设备。";
-            settingsNavigationStatusLabel.Dock = DockStyle.Fill;
-            settingsNavigationStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
-            settingsNavigationStatusLabel.ForeColor = Color.FromArgb(80, 80, 80);
-            settingsNavigationStatusLabel.AutoEllipsis = true;
-            settingsNavigationPanel.Controls.Add(settingsNavigationStatusLabel, 0, 0);
+            var pathPanel = new TableLayoutPanel();
+            pathPanel.Dock = DockStyle.Fill;
+            pathPanel.ColumnCount = 3;
+            pathPanel.RowCount = 1;
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            pathPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+            pathPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            settingsNavigationPanel.Controls.Add(pathPanel, 0, 0);
+
+            var pathLabel = new Label();
+            pathLabel.Text = "设备文件夹";
+            pathLabel.Dock = DockStyle.Fill;
+            pathLabel.TextAlign = ContentAlignment.MiddleLeft;
+            pathPanel.Controls.Add(pathLabel, 0, 0);
+
+            settingsNavigationDevicePathTextBox.Dock = DockStyle.Fill;
+            settingsNavigationDevicePathTextBox.Margin = new Padding(0, 6, 8, 6);
+            settingsNavigationDevicePathTextBox.Text = lastSettingsNavigationDevicePath;
+            pathPanel.Controls.Add(settingsNavigationDevicePathTextBox, 1, 0);
+
+            openSettingsNavigationDevicePathButton.Text = "跳转指定文件夹";
+            openSettingsNavigationDevicePathButton.Dock = DockStyle.Fill;
+            openSettingsNavigationDevicePathButton.Margin = new Padding(0, 6, 0, 6);
+            settingsNavigationButtons.Add(openSettingsNavigationDevicePathButton);
+            pathPanel.Controls.Add(openSettingsNavigationDevicePathButton, 2, 0);
+
+            settingsNavigationToolTip.SetToolTip(settingsNavigationDevicePathTextBox, "输入设备文件夹路径；为空时打开 /sdcard。若输入文件路径，将打开所在文件夹。");
+            settingsNavigationToolTip.SetToolTip(openSettingsNavigationDevicePathButton, "在已勾选的 device 状态设备上打开指定文件夹。");
 
             AddRecentSettingsNavigationSection(settingsNavigationPanel);
 
@@ -1957,6 +1983,7 @@ namespace AdbTool
             applyAnimationScaleButton.Click += delegate { ApplyDisplayAnimationScale(); };
             restoreAnimationScaleButton.Click += delegate { RestoreDisplayAnimationScale(); };
             restoreDisplayAllButton.Click += delegate { RestoreAllDisplaySettings(); };
+            openSettingsNavigationDevicePathButton.Click += delegate { StartSettingsNavigationDevicePath(); };
             displayDensityUnitComboBox.SelectedIndexChanged += delegate { UpdateDisplayDensityValueForSelectedUnit(); };
             displayFontScaleTrackBar.ValueChanged += delegate { UpdateDisplayScaleValueLabels(); };
             windowAnimationScaleTrackBar.ValueChanged += delegate { UpdateDisplayScaleValueLabels(); };
@@ -2182,7 +2209,6 @@ namespace AdbTool
             isDeviceCommandRunning = true;
             SetDeviceCommandUi(true);
             statusLabel.Text = "正在打开“" + target.Name + "”...";
-            settingsNavigationStatusLabel.Text = "正在打开“" + target.Name + "”...";
             AddLogLine("设置页跳转：" + target.Name + "（" + target.Action + "），设备：" + device.Serial);
 
             var serial = device.Serial;
@@ -2225,7 +2251,6 @@ namespace AdbTool
                         if (result.Canceled)
                         {
                             statusLabel.Text = "设置页跳转已中止。";
-                            settingsNavigationStatusLabel.Text = "已中止打开“" + target.Name + "”。";
                             return;
                         }
 
@@ -2235,13 +2260,11 @@ namespace AdbTool
                             {
                                 var fallbackMessage = "设备不支持“" + target.Name + "”直达入口，已打开“" + target.FallbackName + "”设置。";
                                 statusLabel.Text = fallbackMessage;
-                                settingsNavigationStatusLabel.Text = fallbackMessage;
                                 AddLogLine("设置页跳转回退成功：" + target.Name + " -> " + target.FallbackName);
                             }
                             else
                             {
                                 statusLabel.Text = "已打开“" + target.Name + "”。";
-                                settingsNavigationStatusLabel.Text = "已在设备 " + serial + " 上打开“" + target.Name + "”。";
                                 AddLogLine(usedCompatibilityRoute
                                     ? "设置页跳转兼容入口成功：" + target.Name + "（" + compatibilityRoute + "）"
                                     : "设置页跳转成功：" + target.Name);
@@ -2251,10 +2274,56 @@ namespace AdbTool
                         {
                             var failure = GetSettingsNavigationFailure(target, result);
                             statusLabel.Text = failure;
-                            settingsNavigationStatusLabel.Text = failure;
                             AddLogLine("设置页跳转失败：" + failure);
                         }
                     });
+                }
+                finally
+                {
+                    isDeviceCommandRunning = false;
+                    cancelRequested = false;
+                    BeginInvokeIfNeeded(delegate { SetDeviceCommandUi(false); });
+                }
+            }));
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private void StartSettingsNavigationDevicePath()
+        {
+            if (isExecuting || isDeviceCommandRunning || isLogcatRunning || IsMediaCaptureRunning) return;
+
+            var devicePath = NormalizeSettingsNavigationDevicePath(settingsNavigationDevicePathTextBox.Text);
+            var device = GetSingleCheckedDevice("跳转指定文件夹");
+            if (device == null) return;
+
+            var adb = FindAdb();
+            if (adb == null)
+            {
+                HandleMissingAdb(true);
+                return;
+            }
+
+            settingsNavigationDevicePathTextBox.Text = devicePath;
+            cancelRequested = false;
+            isDeviceCommandRunning = true;
+            SetDeviceCommandUi(true);
+            var openingMessage = "正在打开设备文件夹：" + devicePath;
+            statusLabel.Text = openingMessage;
+            AddLogLine(openingMessage + "，设备：" + device.Serial);
+
+            var serial = device.Serial;
+            var thread = new Thread(new ThreadStart(delegate
+            {
+                try
+                {
+                    OpenSettingsNavigationDevicePath(adb, serial, devicePath);
+                }
+                catch (Exception ex)
+                {
+                    var failure = "跳转指定文件夹异常：" + ex.Message;
+                    AddLogLine(failure);
+                    SetSettingsNavigationDevicePathStatus(failure);
                 }
                 finally
                 {
@@ -3866,6 +3935,7 @@ namespace AdbTool
             try
             {
                 foreach (var button in settingsNavigationButtons) button.Enabled = enabled;
+                settingsNavigationDevicePathTextBox.Enabled = enabled;
             }
             finally
             {
@@ -4985,6 +5055,7 @@ namespace AdbTool
                     }
 
                     lastConnectAddress = address;
+                    SaveConfig();
                     commandTitle = title;
                     commandArgs = new[] { adbCommand, address };
                     dialog.DialogResult = DialogResult.OK;
@@ -5876,6 +5947,11 @@ namespace AdbTool
 
                 configuredAdbPath = NormalizeToolPathSetting(ReadJsonString(json, "adbPath"));
                 configuredAaptPath = NormalizeToolPathSetting(ReadJsonString(json, "aaptPath"));
+                var connectAddress = NormalizeAdbAddress(ReadJsonString(json, "lastConnectAddress"));
+                if (!string.IsNullOrEmpty(connectAddress)) lastConnectAddress = connectAddress;
+                var settingsNavigationDevicePath = NormalizeSettingsNavigationDevicePath(ReadJsonString(json, "lastSettingsNavigationDevicePath"));
+                lastSettingsNavigationDevicePath = settingsNavigationDevicePath;
+                settingsNavigationDevicePathTextBox.Text = settingsNavigationDevicePath;
                 LoadRecentApkFolders(json);
                 LoadRecentSettingsNavigationTargets(json);
 
@@ -5979,8 +6055,10 @@ namespace AdbTool
                     "{\r\n" +
                     "    \"adbPath\":  \"" + EscapeJsonString(configuredAdbPath) + "\",\r\n" +
                     "    \"aaptPath\":  \"" + EscapeJsonString(configuredAaptPath) + "\",\r\n" +
+                    "    \"lastConnectAddress\":  \"" + EscapeJsonString(lastConnectAddress) + "\",\r\n" +
                     "    \"lastApkPath\":  \"" + EscapeJsonString(lastApkPath) + "\",\r\n" +
                     "    \"recentApkFolders\":  " + FormatJsonStringArray(recentApkFolders) + ",\r\n" +
+                    "    \"lastSettingsNavigationDevicePath\":  \"" + EscapeJsonString(NormalizeSettingsNavigationDevicePath(lastSettingsNavigationDevicePath)) + "\",\r\n" +
                     "    \"recentSettingsNavigationActions\":  " + FormatJsonStringArray(recentSettingsNavigationTargets.Select(target => target.Action)) + ",\r\n" +
                     "    \"softwarePackageName\":  \"" + EscapeJsonString(softwarePackageTextBox.Text) + "\",\r\n" +
                     "    \"softwareAutoFill\":  " + (softwareAutoFillCheckBox.Checked ? "true" : "false") + ",\r\n" +
@@ -6278,25 +6356,43 @@ namespace AdbTool
 
         private void OpenTransferDevicePath(string adb, string serial, string devicePath, bool allowFileParent)
         {
+            OpenDevicePath(adb, serial, devicePath, allowFileParent, SetTransferOpenStatus, null);
+        }
+
+        private void OpenSettingsNavigationDevicePath(string adb, string serial, string devicePath)
+        {
+            OpenDevicePath(adb, serial, devicePath, true, SetSettingsNavigationDevicePathStatus, delegate(string directoryPath)
+            {
+                BeginInvokeIfNeeded(delegate
+                {
+                    lastSettingsNavigationDevicePath = directoryPath;
+                    settingsNavigationDevicePathTextBox.Text = directoryPath;
+                    SaveConfig();
+                });
+            });
+        }
+
+        private void OpenDevicePath(string adb, string serial, string devicePath, bool allowFileParent, Action<string> setOpenStatus, Action<string> onDirectoryOpened)
+        {
             var pathKind = GetDevicePathKind(adb, serial, devicePath);
             if (cancelRequested)
             {
-                SetTransferOpenStatus("\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\u5df2\u4e2d\u6b62\u3002");
+                SetDevicePathOpenStatus(setOpenStatus, "打开设备目录已中止。");
                 return;
             }
             if (pathKind == DevicePathKind.Unknown)
             {
-                SetTransferOpenStatus("\u65e0\u6cd5\u68c0\u67e5\u8bbe\u5907\u8def\u5f84\uff0c\u8bf7\u67e5\u770b\u65e5\u5fd7\u3002");
+                SetDevicePathOpenStatus(setOpenStatus, "无法检查设备路径，请查看日志。");
                 return;
             }
             if (pathKind == DevicePathKind.Missing)
             {
-                SetTransferOpenStatus("\u8bbe\u5907\u8def\u5f84\u4e0d\u5b58\u5728\u6216\u4e0d\u53ef\u8bbf\u95ee\uff1a" + devicePath);
+                SetDevicePathOpenStatus(setOpenStatus, "设备路径不存在或不可访问：" + devicePath);
                 return;
             }
             if (pathKind == DevicePathKind.File && !allowFileParent)
             {
-                SetTransferOpenStatus("\u8bbe\u5907\u76ee\u5f55\u4e0d\u80fd\u662f\u6587\u4ef6\uff1a" + devicePath);
+                SetDevicePathOpenStatus(setOpenStatus, "设备目录不能是文件：" + devicePath);
                 return;
             }
 
@@ -6308,15 +6404,16 @@ namespace AdbTool
                 if (TryStartDocumentsUi(adb, serial, directoryUri, out component))
                 {
                     var success = pathKind == DevicePathKind.File
-                        ? "\u5df2\u6253\u5f00\u6587\u4ef6\u6240\u5728\u76ee\u5f55\uff1a" + directoryPath
-                        : "\u5df2\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\uff1a" + directoryPath;
-                    AddLogLine(success + "\uff08" + component + "\uff09");
-                    SetTransferOpenStatus(success);
+                        ? "已打开文件所在目录：" + directoryPath
+                        : "已打开设备目录：" + directoryPath;
+                    AddLogLine(success + "（" + component + "）");
+                    if (onDirectoryOpened != null) onDirectoryOpened(directoryPath);
+                    SetDevicePathOpenStatus(setOpenStatus, success);
                     return;
                 }
                 if (cancelRequested)
                 {
-                    SetTransferOpenStatus("\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\u5df2\u4e2d\u6b62\u3002");
+                    SetDevicePathOpenStatus(setOpenStatus, "打开设备目录已中止。");
                     return;
                 }
             }
@@ -6325,19 +6422,24 @@ namespace AdbTool
             if (TryStartDocumentsUiHome(adb, serial, out fallbackComponent))
             {
                 var fallback = string.IsNullOrWhiteSpace(directoryUri)
-                    ? "\u8be5\u8def\u5f84\u4e0d\u5c5e\u4e8e\u53ef\u76f4\u63a5\u6253\u5f00\u7684\u5171\u4eab\u5b58\u50a8\uff0c\u5df2\u6253\u5f00\u6587\u4ef6\u7ba1\u7406\u5668\u9996\u9875\u3002"
-                    : "\u8bbe\u5907\u4e0d\u652f\u6301\u7cbe\u786e\u6253\u5f00\u8be5\u76ee\u5f55\uff0c\u5df2\u6253\u5f00\u6587\u4ef6\u7ba1\u7406\u5668\u9996\u9875\u3002";
-                AddLogLine(fallback + "\uff08" + fallbackComponent + "\uff09");
-                SetTransferOpenStatus(fallback);
+                    ? "该路径不属于可直接打开的共享存储，已打开文件管理器首页。"
+                    : "设备不支持精确打开该目录，已打开文件管理器首页。";
+                AddLogLine(fallback + "（" + fallbackComponent + "）");
+                SetDevicePathOpenStatus(setOpenStatus, fallback);
                 return;
             }
 
             if (cancelRequested)
             {
-                SetTransferOpenStatus("\u6253\u5f00\u8bbe\u5907\u76ee\u5f55\u5df2\u4e2d\u6b62\u3002");
+                SetDevicePathOpenStatus(setOpenStatus, "打开设备目录已中止。");
                 return;
             }
-            SetTransferOpenStatus("\u65e0\u6cd5\u6253\u5f00\u8bbe\u5907\u6587\u4ef6\u7ba1\u7406\u5668\uff0c\u8bbe\u5907\u7cfb\u7edf\u53ef\u80fd\u4e0d\u652f\u6301 DocumentsUI\u3002");
+            SetDevicePathOpenStatus(setOpenStatus, "无法打开设备文件管理器，设备系统可能不支持 DocumentsUI。");
+        }
+
+        private static void SetDevicePathOpenStatus(Action<string> setOpenStatus, string message)
+        {
+            if (setOpenStatus != null) setOpenStatus(message);
         }
 
         private DevicePathKind GetDevicePathKind(string adb, string serial, string devicePath)
@@ -6459,6 +6561,15 @@ namespace AdbTool
             {
                 statusLabel.Text = message;
                 transferStatusLabel.Text = message;
+            });
+        }
+
+        private void SetSettingsNavigationDevicePathStatus(string message)
+        {
+            AddLogLine(message);
+            BeginInvokeIfNeeded(delegate
+            {
+                statusLabel.Text = message;
             });
         }
 
@@ -6723,6 +6834,13 @@ namespace AdbTool
         private static string NormalizeDevicePath(string path)
         {
             return NormalizeDeviceDirectory(path);
+        }
+
+        private static string NormalizeSettingsNavigationDevicePath(string path)
+        {
+            path = NormalizeDevicePath(path);
+            if (string.IsNullOrWhiteSpace(path)) return DefaultSettingsNavigationDevicePath;
+            return path.StartsWith("/", StringComparison.Ordinal) ? path : "/" + path;
         }
 
         private static string JoinDevicePath(string left, string right)
