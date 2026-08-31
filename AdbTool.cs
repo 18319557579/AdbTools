@@ -75,6 +75,7 @@ namespace AdbTool
         private enum SoftwareManagementOperation
         {
             Launch,
+            ApplicationDetails,
             ForceStop,
             ShowInfo,
             Disable,
@@ -225,6 +226,7 @@ namespace AdbTool
         private readonly TextBox softwareForegroundActivityTextBox = new TextBox();
         private readonly CheckBox softwareAutoFillCheckBox = new CheckBox();
         private readonly Button softwareLaunchButton = new Button();
+        private readonly Button softwareApplicationDetailsButton = new Button();
         private readonly Button softwareForceStopButton = new Button();
         private readonly Button softwareInfoButton = new Button();
         private readonly Button softwareDisableButton = new Button();
@@ -877,6 +879,7 @@ namespace AdbTool
             FlowLayoutPanel basicPanel;
             var basicGroup = CreateSoftwareActionGroup("基础操作", out basicPanel);
             AddSoftwareActionButton(basicPanel, softwareLaunchButton, "运行");
+            AddSoftwareActionButton(basicPanel, softwareApplicationDetailsButton, "应用详情");
             AddSoftwareActionButton(basicPanel, softwareForceStopButton, "强制停止");
             AddSoftwareActionButton(basicPanel, softwareInfoButton, "软件信息");
             AddSoftwareActionButton(basicPanel, softwareExtractApkButton, "提取安装包");
@@ -904,6 +907,7 @@ namespace AdbTool
 
             softwareManagementToolTip.SetToolTip(softwareAutoFillCheckBox, "开启后会把当前界面包名自动填入目标包名。");
             softwareManagementToolTip.SetToolTip(softwareLaunchButton, "使用 monkey 启动该包名的默认入口。");
+            softwareManagementToolTip.SetToolTip(softwareApplicationDetailsButton, "打开系统设置中的该应用详情页面。");
             softwareManagementToolTip.SetToolTip(softwareForceStopButton, "执行 am force-stop。");
             softwareManagementToolTip.SetToolTip(softwareInfoButton, "读取 dumpsys package 中的版本、路径和状态摘要。");
             softwareManagementToolTip.SetToolTip(softwareExtractApkButton, "读取 pm path 并把 APK 拉取到本机 ApkExt 目录。");
@@ -1943,6 +1947,7 @@ namespace AdbTool
             softwarePackageTextBox.TextChanged += delegate { SaveConfig(); };
             softwareAutoFillCheckBox.CheckedChanged += delegate { UpdateSoftwareAutoFillState(); SaveConfig(); };
             softwareLaunchButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Launch); };
+            softwareApplicationDetailsButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ApplicationDetails); };
             softwareForceStopButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ForceStop); };
             softwareInfoButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.ShowInfo); };
             softwareDisableButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Disable); };
@@ -3878,6 +3883,7 @@ namespace AdbTool
             softwareForegroundActivityTextBox.Enabled = enabled;
             softwareAutoFillCheckBox.Enabled = enabled;
             softwareLaunchButton.Enabled = enabled;
+            softwareApplicationDetailsButton.Enabled = enabled;
             softwareForceStopButton.Enabled = enabled;
             softwareInfoButton.Enabled = enabled;
             softwareDisableButton.Enabled = enabled;
@@ -5229,6 +5235,10 @@ namespace AdbTool
                     result = InvokeProcess(adb, new[] { "-s", serial, "shell", "monkey", "-p", packageName, "-c", "android.intent.category.LAUNCHER", "1" }, true);
                     return CompleteSoftwareCommandResult(result, packageName, "启动成功。", "启动失败", out summary);
 
+                case SoftwareManagementOperation.ApplicationDetails:
+                    result = InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "start", "-W", "-a", "android.settings.APPLICATION_DETAILS_SETTINGS", "-d", "package:" + packageName }, true);
+                    return CompleteSoftwareCommandResult(result, packageName, "已打开应用详情。", "打开应用详情失败", out summary);
+
                 case SoftwareManagementOperation.ForceStop:
                     result = InvokeProcess(adb, new[] { "-s", serial, "shell", "am", "force-stop", packageName }, true);
                     return CompleteSoftwareCommandResult(result, packageName, "已强制停止。", "强制停止失败", out summary);
@@ -5334,6 +5344,7 @@ namespace AdbTool
             switch (operation)
             {
                 case SoftwareManagementOperation.Launch: return "运行软件";
+                case SoftwareManagementOperation.ApplicationDetails: return "打开应用详情";
                 case SoftwareManagementOperation.ForceStop: return "强制停止";
                 case SoftwareManagementOperation.ShowInfo: return "读取软件信息";
                 case SoftwareManagementOperation.Disable: return "禁用软件";
