@@ -42,6 +42,19 @@
 - 支持记忆上次使用的传输方向、源路径和目标路径。
 - 多设备导出时会按设备区分保存，避免文件互相覆盖。
 
+### 文本互传
+
+- 在“文本互传”页直接读写手机剪贴板，支持中文、英文、Emoji、多行文本及特殊符号。
+- 使用已有 USB 或无线 ADB 连接，无需手机安装 App、无需投屏窗口或互联网；一次只连接一台 `device` 状态设备。
+- 手动收发：“电脑 → 手机”输入文本，或用 `Ctrl+V` / 右键粘贴后点击“发送到手机剪贴板”，再在手机目标应用中长按粘贴；“手机 → 电脑”先在手机复制，点击“读取手机剪贴板”，在右侧选中文本后用 `Ctrl+C` / 右键复制。发送会读回核对，不自动向手机当前应用注入粘贴。
+- 两侧分别提供“清空”按钮，只清空对应文本框，不修改手机剪贴板；接收文本不会覆盖发送草稿，右侧预览只读但可选中复制。
+- 连接期间约每 0.7 秒检查设备选择和连接状态，不定时读取或传输剪贴板内容；只有点击发送或读取按钮才执行文本传输。
+- 只传纯文本，不传图片、文件或富文本格式。
+- 单次发送上限为 **262130 个 UTF-8 字节**（约 256 KB，中文、Emoji 会占多个字节），超限会提示分段发送。手机返回内容接近协议截断边界时拒绝交付可能不完整的文本。
+- 设备选择变化或连接断开时停止文本连接，需重新连接；重新连接会清空旧接收预览，保留发送草稿。
+- 文本仅在当前会话内存中处理，不保存到配置、历史记录或运行日志。日志仅记录方向、长度和结果。
+- 内置并校验固定版本的 scrcpy 4.0 服务，运行时临时推送至手机，退出时清理本功能的连接和临时文件。不会关闭其他 ADB/scrcpy 会话。
+
 ### 截屏与录屏
 
 - 支持截取设备当前画面并保存为 PNG。
@@ -101,7 +114,7 @@
 4. 点击工具设置，自动检测或手动指定 `adb.exe`、`aapt.exe/aapt2.exe` 路径。
 5. 通过 USB 连接设备，或点击“连接设备”输入无线 ADB 地址。
 6. 点击“刷新”或在主窗口处于焦点时按 `F5`，在目标设备列表中勾选需要操作的设备。
-7. 切换到对应功能页执行 APK 安装、文件传输、截屏录屏、日志录制或设置页跳转等操作。
+7. 切换到对应功能页执行 APK 安装、文件传输、文本互传、截屏录屏、日志录制或设置页跳转等操作。使用文本互传时，先勾选一台设备，再点击“连接文本服务”。
 
 ## 工具路径查找规则
 
@@ -131,22 +144,26 @@
 ```text
 D:\adb_tools
 ├── AdbTool.cs                 # WinForms 主程序源码
+├── TextTransfer.cs            # 文本互传页面、手动收发与连接状态检查
+├── ScrcpyClipboardSession.cs  # 固定版本的剪贴板通信与会话清理
 ├── AssemblyInfo.cs            # 程序程序集信息
 ├── ADB工具.exe                # 已编译的可执行文件
 ├── app.ico                    # 程序图标
 ├── assets\
 │   ├── app-icon.svg           # 图标 SVG 源文件
-│   └── build-app-icon.ps1     # 生成 app.ico 的脚本
+│   ├── build-app-icon.ps1     # 生成 app.ico 的脚本
+│   └── scrcpy\                # 内嵌服务、上游许可证与版本说明
+├── tests\                    # 文本协议与可选实机回归测试
 ├── adb-tool.config.json       # 本地运行配置示例/旧版配置
 └── install-apk.config.json    # 旧版安装工具配置
 ```
 
 ## 从源码编译
 
-项目是单文件 WinForms 程序，没有依赖 NuGet 包。可在 Visual Studio Developer PowerShell 或已配置 .NET Framework 编译器的命令行中执行：
+项目是 .NET Framework WinForms 程序，没有依赖 NuGet 包。文本服务在编译时嵌入 EXE，运行不依赖 `bin\scrcpy` 文件夹。可在 Visual Studio Developer PowerShell 或已配置 .NET Framework 编译器的命令行中执行：
 
 ```powershell
-csc /target:winexe /platform:anycpu /out:"ADB工具.exe" /win32icon:app.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll AdbTool.cs AssemblyInfo.cs
+csc /target:winexe /platform:anycpu /out:"ADB工具.exe" /win32icon:app.ico /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /resource:assets\scrcpy\scrcpy-server-v4.0,AdbTool.scrcpy-server-v4.0 AdbTool.cs TextTransfer.cs ScrcpyClipboardSession.cs AssemblyInfo.cs
 ```
 
 如需重新生成图标：
@@ -156,6 +173,21 @@ powershell -ExecutionPolicy Bypass -File .\assets\build-app-icon.ps1
 ```
 
 图标生成脚本会调用 Microsoft Edge 的无头模式渲染 SVG，再生成多尺寸 `.ico` 文件。
+
+文本传输测试（临时测试程序运行后自动删除）：
+
+```powershell
+# 本地协议回归：分片收包、Unicode、读回核对、异常长度、超限和断开连接等
+.\tests\run-text-transfer-tests.ps1
+
+# 可选实机回归：先在手机复制一段普通文本，测试会临时改写并在结束时恢复手机剪贴板
+.\tests\run-text-transfer-tests.ps1 -AdbPath "C:\Android\platform-tools\adb.exe" -Serial "设备序列号"
+
+# 加测界面事件：手动收发、清空和连接状态检查，不覆盖电脑实际剪贴板
+.\tests\run-text-transfer-tests.ps1 -AdbPath "C:\Android\platform-tools\adb.exe" -Serial "设备序列号" -UiTests
+```
+
+scrcpy 服务采用 Apache-2.0 许可证，原始许可证和固定版本说明见 `assets\scrcpy\LICENSE`、`assets\scrcpy\NOTICE.md`。升级时必须同时核对协议、握手版本和 SHA-256，不应单独替换服务文件。
 
 ## 常见问题
 
@@ -180,6 +212,8 @@ powershell -ExecutionPolicy Bypass -File .\assets\build-app-icon.ps1
 设备上已有更高 `versionCode` 的应用。可卸载旧应用，或提高当前 APK 的版本码后重新安装。
 
 ## 注意事项
+
+- 文本互传依赖手机系统的剪贴板兼容性。若无法读取，请先在手机复制纯文本后重试；若写入后核对失败，可能是厂商系统限制或另一端同时修改了剪贴板，界面会显示失败，不会仅凭请求确认提示成功。
 
 - 卸载、清除数据、禁用应用和显示参数修改都可能影响设备状态，请确认目标设备和包名后再执行。
 - 系统应用卸载仅针对当前用户，但仍可能影响设备功能。

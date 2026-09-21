@@ -25,7 +25,7 @@ namespace AdbTool
         }
     }
 
-    internal sealed class MainForm : Form
+    internal sealed partial class MainForm : Form
     {
         private const string AppDisplayName = "ADB工具";
         private const string ConfigFileName = "adb-tool.config.json";
@@ -467,6 +467,7 @@ namespace AdbTool
             tabControl.Dock = DockStyle.Fill;
             tabControl.TabPages.Add(installTab);
             tabControl.TabPages.Add(fileTransferTab);
+            tabControl.TabPages.Add(textTransferTab);
             tabControl.TabPages.Add(screenshotTab);
             tabControl.TabPages.Add(logRecordTab);
             tabControl.TabPages.Add(softwareManagementTab);
@@ -484,6 +485,7 @@ namespace AdbTool
 
             BuildInstallTab();
             BuildFileTransferTab();
+            BuildTextTransferTab();
             BuildScreenshotTab();
             BuildLogRecordTab();
             BuildSoftwareManagementTab();
@@ -7872,6 +7874,7 @@ namespace AdbTool
                 return;
             }
             if (isLogcatRunning) StopLogcatRecording();
+            StopTextTransfer("文本连接已关闭。", true);
             if (isExecuting || isDeviceCommandRunning || isScreenshotRunning) { cancelRequested = true; KillCurrentProcess(); }
             if (screenshotPreviewBox.Image != null)
             {
