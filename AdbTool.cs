@@ -412,6 +412,7 @@ namespace AdbTool
             MinimumSize = new Size(1080, 820);
             Size = new Size(1180, 900);
             Font = new Font("Microsoft YaHei UI", 9F);
+            KeyPreview = true;
             AllowDrop = true;
             BuildUi();
             WireEvents();
@@ -1876,6 +1877,7 @@ namespace AdbTool
             deviceList.CheckOnClick = true;
             devicePanel.Controls.Add(deviceList, 0, 1);
             deviceInfoToolTip.SetToolTip(connectButton, "打开设备连接窗口，输入无线 ADB 地址后连接或断连。");
+            deviceInfoToolTip.SetToolTip(refreshButton, "刷新目标设备列表（F5）。");
         }
 
         private void BuildSharedLogArea(Control parent)
@@ -2022,11 +2024,21 @@ namespace AdbTool
             screenRecordBitRateNumeric.ValueChanged += delegate { SaveConfig(); };
             DragEnter += OnDragEnter;
             DragDrop += OnDragDrop;
+            KeyDown += OnMainFormKeyDown;
             Load += delegate { ApplySavedLayoutHeights(); };
             ResizeEnd += delegate { CaptureLayoutHeights(); SaveConfig(); };
             mainSplitContainer.SplitterMoved += delegate { OnLayoutSplitterMoved(); };
             lowerSplitContainer.SplitterMoved += delegate { OnLayoutSplitterMoved(); };
             FormClosing += OnFormClosing;
+        }
+
+        private void OnMainFormKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.F5 || e.Modifiers != Keys.None) return;
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            RefreshDevices(true);
         }
 
         private void OnLayoutSplitterMoved()
