@@ -32,7 +32,7 @@ namespace AdbTool
         private const string RunLogPrefix = "adb-tool";
         private const string RemoteTempFilePrefix = "adb-tool";
         private const string ApkStageDirName = "ApkStage";
-        private const int MaxRecentApkFolders = 10;
+        private const int MaxRecentApkFolders = 20;
         private const int MaxRecentSettingsNavigationTargets = 10;
         private const int SettingsNavigationColumnCount = 5;
         private const int SettingsNavigationTitleHeight = 28;
@@ -218,6 +218,9 @@ namespace AdbTool
         private readonly Button clearLogButton = new Button();
         private readonly Label apkInfoLabel = new Label();
         private readonly ListView recentApkFoldersListView = new ListView();
+        private readonly ContextMenuStrip recentApkFolderMenu = new ContextMenuStrip();
+        private readonly ToolStripMenuItem deleteRecentApkFolderMenuItem = new ToolStripMenuItem("删除");
+        private readonly ToolStripMenuItem openRecentApkFolderMenuItem = new ToolStripMenuItem("跳转");
         private readonly Label statusLabel = new Label();
         private readonly TextBox logBox = new TextBox();
 
@@ -367,6 +370,7 @@ namespace AdbTool
         private bool configReady;
         private bool applyingLayoutConfig;
         private bool refreshingRecentApkFolders;
+        private string recentApkFolderContextPath = "";
         private bool updatingTransferFields;
         private int savedTabAreaHeight = DefaultTabAreaHeight;
         private int savedDeviceAreaHeight = DefaultDeviceAreaHeight;
@@ -807,6 +811,7 @@ namespace AdbTool
             recentApkFoldersListView.HeaderStyle = ColumnHeaderStyle.Nonclickable;
             recentApkFoldersListView.ShowItemToolTips = true;
             recentApkFoldersListView.Columns.Add("APK 文件夹");
+            recentApkFolderMenu.Items.AddRange(new ToolStripItem[] { deleteRecentApkFolderMenuItem, openRecentApkFolderMenuItem });
             historyGroup.Controls.Add(recentApkFoldersListView);
             recentApkFoldersListView.Resize += delegate { ResizeRecentApkFolderColumn(); };
             ResizeRecentApkFolderColumn();
@@ -1933,7 +1938,9 @@ namespace AdbTool
         private void WireEvents()
         {
             browseButton.Click += delegate { BrowseApk(); };
-            recentApkFoldersListView.SelectedIndexChanged += delegate { SelectApkFromRecentFolder(); };
+            recentApkFoldersListView.MouseClick += OnRecentApkFolderMouseClick;
+            deleteRecentApkFolderMenuItem.Click += delegate { DeleteRecentApkFolder(); };
+            openRecentApkFolderMenuItem.Click += delegate { OpenRecentApkFolder(); };
             refreshButton.Click += delegate { RefreshDevices(true); };
             settingsButton.Click += delegate { ShowToolSettingsDialog(); };
             connectButton.Click += delegate { ShowDeviceConnectionDialog(); };
@@ -4942,10 +4949,29 @@ namespace AdbTool
             recentApkFoldersListView.Columns[0].Width = Math.Max(120, recentApkFoldersListView.ClientSize.Width - 4);
         }
 
-        private void SelectApkFromRecentFolder()
+        private void OnRecentApkFolderMouseClick(object sender, MouseEventArgs e)
         {
-            if (refreshingRecentApkFolders || recentApkFoldersListView.SelectedItems.Count == 0) return;
-            var folder = recentApkFoldersListView.SelectedItems[0].Tag as string;
+            if (refreshingRecentApkFolders) return;
+            var item = recentApkFoldersListView.GetItemAt(e.X, e.Y);
+            if (item == null) return;
+            var folder = item.Tag as string;
+            if (string.IsNullOrWhiteSpace(folder)) return;
+
+            if (e.Button == MouseButtons.Left)
+            {
+                SelectApkFromRecentFolder(folder);
+                return;
+            }
+            if (e.Button != MouseButtons.Right) return;
+
+            item.Selected = true;
+            item.Focused = true;
+            recentApkFolderContextPath = folder;
+            recentApkFolderMenu.Show(recentApkFoldersListView, e.Location);
+        }
+
+        private void SelectApkFromRecentFolder(string folder)
+        {
             if (string.IsNullOrWhiteSpace(folder)) return;
 
             if (!Directory.Exists(folder))
@@ -4972,6 +4998,41 @@ namespace AdbTool
             catch (Exception ex)
             {
                 MessageBox.Show(this, "无法读取此文件夹。\r\n\r\n" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void DeleteRecentApkFolder()
+        {
+            var folder = recentApkFolderContextPath;
+            recentApkFolderContextPath = "";
+            if (string.IsNullOrWhiteSpace(folder)) return;
+            if (recentApkFolders.RemoveAll(item => string.Equals(item, folder, StringComparison.OrdinalIgnoreCase)) == 0) return;
+            RefreshRecentApkFoldersList();
+            SaveConfig();
+        }
+
+        private void OpenRecentApkFolder()
+        {
+            var folder = recentApkFolderContextPath;
+            recentApkFolderContextPath = "";
+            if (string.IsNullOrWhiteSpace(folder)) return;
+            if (!Directory.Exists(folder))
+            {
+                MessageBox.Show(this, "此文件夹不存在。", AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = folder,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "无法打开此文件夹。\r\n\r\n" + ex.Message, AppDisplayName, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
