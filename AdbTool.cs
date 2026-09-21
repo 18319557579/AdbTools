@@ -367,6 +367,7 @@ namespace AdbTool
         private volatile bool screenRecordStopRequested;
         private volatile bool isSoftwareForegroundRefreshing;
         private bool loadingConfig;
+        private bool wasInstallOperation = true;
         private bool configReady;
         private bool applyingLayoutConfig;
         private bool refreshingRecentApkFolders;
@@ -773,6 +774,7 @@ namespace AdbTool
             AddModeOption(optionsPanel, clearDataModeRadioButton, "清空数据", false);
             AddModeOption(optionsPanel, startAppModeRadioButton, "启动应用", false);
             launchAfterInstallCheckBox.Text = "安装后启动";
+            launchAfterInstallCheckBox.Checked = true;
             launchAfterInstallCheckBox.AutoSize = true;
             launchAfterInstallCheckBox.Margin = new Padding(0, 12, 10, 0);
             optionsPanel.Controls.Add(launchAfterInstallCheckBox);
@@ -1948,11 +1950,11 @@ namespace AdbTool
             installButton.Click += delegate { StartExecution(); };
             cancelButton.Click += delegate { RequestCancel(); };
             apkTextBox.TextChanged += delegate { UpdateApkInfo(apkTextBox.Text); SaveConfig(); };
-            installModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            cleanInstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            uninstallModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            clearDataModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
-            startAppModeRadioButton.CheckedChanged += delegate { UpdateExecutionOptionState(); };
+            installModeRadioButton.CheckedChanged += delegate { if (installModeRadioButton.Checked) UpdateExecutionOptionState(); };
+            cleanInstallModeRadioButton.CheckedChanged += delegate { if (cleanInstallModeRadioButton.Checked) UpdateExecutionOptionState(); };
+            uninstallModeRadioButton.CheckedChanged += delegate { if (uninstallModeRadioButton.Checked) UpdateExecutionOptionState(); };
+            clearDataModeRadioButton.CheckedChanged += delegate { if (clearDataModeRadioButton.Checked) UpdateExecutionOptionState(); };
+            startAppModeRadioButton.CheckedChanged += delegate { if (startAppModeRadioButton.Checked) UpdateExecutionOptionState(); };
             softwarePackageTextBox.TextChanged += delegate { SaveConfig(); };
             softwareAutoFillCheckBox.CheckedChanged += delegate { UpdateSoftwareAutoFillState(); SaveConfig(); };
             softwareLaunchButton.Click += delegate { StartSoftwareManagementOperation(SoftwareManagementOperation.Launch); };
@@ -7389,6 +7391,9 @@ namespace AdbTool
             var isInstallOperation = !uninstallModeRadioButton.Checked && !clearDataModeRadioButton.Checked && !startAppModeRadioButton.Checked;
             launchAfterInstallCheckBox.Enabled = isInstallOperation;
             if (!isInstallOperation) launchAfterInstallCheckBox.Checked = false;
+            // 仅在返回安装模式时恢复勾选，安装模式之间切换时保留用户选择。
+            else if (!wasInstallOperation) launchAfterInstallCheckBox.Checked = true;
+            wasInstallOperation = isInstallOperation;
         }
 
         private string GetExecutionMode()
